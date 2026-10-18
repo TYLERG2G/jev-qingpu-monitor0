@@ -1,0 +1,3267 @@
+openapi: 3.1.0
+info:
+  title: JEV 專案 API（草案）— 聯上世界房源監控、同屋辨識與完整門牌推斷
+  version: 0.2.0-draft
+  description: |
+    草案，尚未實作。JEV 是專案代稱，不是社區名稱；試點社區是桃園市大園區青埔「聯上世界」。
+    MVP 範圍（單一社區、中古屋買賣、單一使用者）屬於建議預設，尚未確認（Q-020、Q-021）。
+    欄位與 enum 依 docs/05-data-model.md；事件語意依 docs/12-event-contract.md；通用規則依 docs/08-api-contract.md。
+    rule_score 是規則分數，不是機率；calibrated_probability 在校準前一律為 null。
+servers:
+  - url: http://127.0.0.1:8787/api/v1
+    description: 本機（建議預設，Q-014）
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: system
+  - name: registry
+  - name: listings
+  - name: evidence
+  - name: assessments
+  - name: identity
+  - name: reviews
+  - name: events
+  - name: alerts
+  - name: sources
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [system]
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /community:
+    get:
+      operationId: getCommunity
+      tags: [system]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Community' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /registry/buildings:
+    get:
+      operationId: listBuildings
+      tags: [registry]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Building' } }
+
+  /registry/unit-types:
+    get:
+      operationId: listUnitTypes
+      tags: [registry]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/UnitType' } }
+
+  /registry/sales-units:
+    get:
+      operationId: listSalesUnits
+      tags: [registry]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/SalesUnit' } }
+
+  /registry/dwellings:
+    get:
+      operationId: listDwellings
+      tags: [registry]
+      parameters:
+        - { name: sales_unit_id, in: query, schema: { type: integer } }
+        - { name: floor, in: query, schema: { type: integer } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Dwelling' } }
+
+  /registry/address-units:
+    get:
+      operationId: listAddressUnits
+      tags: [registry]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AddressUnit' } }
+
+  /registry/mappings:
+    get:
+      operationId: listRegistryMappings
+      tags: [registry]
+      parameters:
+        - { name: mapping_type, in: query, schema: { $ref: '#/components/schemas/MappingType' } }
+        - { name: record_status, in: query, schema: { $ref: '#/components/schemas/RecordStatus' } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/RegistryMapping' } }
+
+  /registry/coverage:
+    get:
+      operationId: listRegistryCoverage
+      tags: [registry]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/RegistryCoverage' } }
+
+  /registry/derivation-rules:
+    get:
+      operationId: listDerivationRules
+      tags: [registry]
+      parameters:
+        - { name: record_status, in: query, schema: { $ref: '#/components/schemas/RecordStatus' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DerivationRule' } }
+    post:
+      operationId: createDerivationRule
+      tags: [registry]
+      summary: 提出門牌推導規則（狀態由佐證決定，通常是 TRANSCRIBED_UNVERIFIED 或 HYPOTHETICAL；要經覆核才會變成 VERIFIED）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DerivationRuleCreate' }
+      responses:
+        '201':
+          description: 已建立；產生新的 registry_version 與 REGISTRY_UPDATED 事件
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DerivationRule' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /registry/derivation-rules/{rule_id}:
+    parameters:
+      - { name: rule_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getDerivationRule
+      tags: [registry]
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DerivationRule' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /registry/derivation-rules/{rule_id}:retract:
+    parameters:
+      - { name: rule_id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: retractDerivationRule
+      tags: [registry]
+      summary: 撤回規則；連鎖撤回依賴的證據，並重新評估受影響候選
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleRequest' }
+      responses:
+        '200':
+          description: 已撤回
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReassessResult' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /registry:import:
+    post:
+      operationId: importRegistry
+      tags: [registry]
+      summary: 匯入名冊補充資料（CSV）；每一列都要附出處，產生新的 registry_version
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+        - name: kind
+          in: query
+          required: true
+          schema: { type: string, enum: [SALES_UNIT_TO_NUMBER, DWELLING, ADDRESS_UNIT, UNIT_TYPE, COVERAGE] }
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200':
+          description: 匯入結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /addresses:normalize:
+    post:
+      operationId: normalizeAddress
+      tags: [registry]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address_text]
+              properties:
+                address_text: { type: string, minLength: 1 }
+            examples:
+              fullwidth:
+                value: { address_text: '桃園市大園區高鐵南路一段７９號十二樓' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NormalizedAddress' }
+              examples:
+                fullwidth:
+                  value:
+                    city: 桃園市
+                    district: 大園區
+                    road: 高鐵南路
+                    section: 1
+                    lane: null
+                    alley: null
+                    number: 79
+                    number_sub: null
+                    floor: '12'
+                    floor_sub: null
+                    precision: FLOOR
+                    addr_key: '高鐵南路|1|||79||12|'
+
+  /listings:
+    get:
+      operationId: listListings
+      tags: [listings]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ListingStatus' } }
+        - { name: membership_status, in: query, schema: { $ref: '#/components/schemas/MembershipStatus' } }
+        - { name: address_status, in: query, schema: { $ref: '#/components/schemas/AddressStatus' } }
+        - { name: source_code, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Listing' } }
+    post:
+      operationId: createListing
+      tags: [listings]
+      summary: 登錄一則刊登（人工）
+      description: |
+        識別規則：非 SRC-MANUAL 的來源必須提供 external_id 或 url（schema 強制）。
+        SRC-MANUAL 兩者都沒有時，伺服器產生 external_id = "man_<ULID>"（external_id_origin = SYSTEM_GENERATED）。
+        同一個 (source_code, external_id) 已存在 → 409 LISTING_EXISTS；更新請用 POST /listings/{listing_id}/snapshots。
+        重送：同一個 Idempotency-Key 會重播原本的回應；沒有帶 key 的重送會建立新刊登，交給同屋辨識處理。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListingCreate' }
+            examples:
+              manualNoIds:
+                summary: 人工記錄，沒有網址也沒有平台編號
+                value:
+                  source_code: SRC-MANUAL
+                  import_mode: INCREMENTAL
+                  is_new_listing: null
+                  snapshot: { total_price: 15800000, building_ping: 45.2, floor_text: '12F/24F', rooms: 3, halls: 2, baths: 2, address_text: '高鐵南路一段', community_text: '聯上世界', title: '聯上世界三房平車' }
+                  evidence_origin: { origin_source_code: SRC-591, url: null, note: '使用者在 591 社區頁瀏覽後人工記錄' }
+              platformWithUrl:
+                value:
+                  source_code: SRC-591
+                  url: 'https://example.invalid/listing/123'
+                  snapshot: { total_price: 15800000 }
+      responses:
+        '201':
+          description: 已建立
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListingDetail' }
+        '409':
+          description: 刊登已存在（LISTING_EXISTS），或相同 Idempotency-Key 的請求正在處理中
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                exists:
+                  value:
+                    type: 'https://jev.local/problems/listing-exists'
+                    title: Listing already exists
+                    status: 409
+                    code: LISTING_EXISTS
+                    detail: 'SRC-591 / 123 已存在'
+                    existing_listing_id: 11
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /listings:import:
+    post:
+      operationId: importListings
+      tags: [listings]
+      summary: CSV 批次匯入（欄位見 ListingImportRow）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+        - name: import_mode
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ImportMode' }
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200':
+          description: 匯入結果；fetch_run 的 run_type 是 MANUAL_IMPORT，coverage 是 NOT_APPLICABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /listings/{listing_id}:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      operationId: getListing
+      tags: [listings]
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListingDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: patchListing
+      tags: [listings]
+      summary: JSON Merge Patch：省略的欄位不變；null 代表清除（只限可以是 null 的欄位）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/ListingPatch' }
+            examples:
+              clearUrl:
+                value: { url: null }
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListingDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /listings/{listing_id}/snapshots:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      operationId: listSnapshots
+      tags: [listings]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Snapshot' } }
+    post:
+      operationId: addSnapshot
+      tags: [listings]
+      summary: 新增一次人工觀測（快照不可修改，只能新增）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SnapshotInput' }
+      responses:
+        '201':
+          description: 已新增；內容雜湊與上一筆相同時回 200，不會新增
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        '200':
+          description: 內容沒有變化（重複），回傳既有快照
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /listings/{listing_id}:mark-delisted:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      operationId: markListingDelisted
+      tags: [listings]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkDelistedRequest' }
+      responses:
+        '200':
+          description: 已下架，並產生 LISTING_DELISTED 事件
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListingDetail' }
+        '409':
+          description: 已經是 DELISTED
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /listings/{listing_id}/candidates:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      operationId: listListingCandidates
+      tags: [assessments]
+      summary: 目前門牌評估的候選（含被排除的候選與排除原因）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ScoredCandidate' } }
+
+  /listings/{listing_id}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      operationId: listListingEvidence
+      tags: [evidence]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/EvidenceStatus' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+
+  /listings/{listing_id}/assessments:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      operationId: listListingAssessments
+      tags: [assessments]
+      summary: 評估歷史（含 SUPERSEDED）
+      parameters:
+        - { name: subject_type, in: query, schema: { $ref: '#/components/schemas/SubjectType' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Assessment' } }
+
+  /evidence:
+    post:
+      operationId: createEvidence
+      tags: [evidence]
+      summary: 新增使用者提供的證據（USER_OBSERVATION 或人工轉錄）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceCreate' }
+      responses:
+        '201':
+          description: 已建立
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Evidence' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /evidence/{evidence_id}:
+    parameters:
+      - { name: evidence_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getEvidence
+      tags: [evidence]
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Evidence' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /evidence/{evidence_id}:retract:
+    parameters:
+      - { name: evidence_id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: retractEvidence
+      tags: [evidence]
+      summary: 撤回證據，並觸發依賴它的評估重新計算
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleRequest' }
+      responses:
+        '200':
+          description: 已撤回
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReassessResult' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /evidence/{evidence_id}/dependents:
+    parameters:
+      - { name: evidence_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getEvidenceDependents
+      tags: [evidence]
+      summary: 直接與間接依賴這筆證據的證據，以及受影響的評估（連鎖撤回的範圍）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DependentsResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /evidence:independence:
+    post:
+      operationId: checkEvidenceIndependence
+      tags: [evidence]
+      summary: 試算證據之間的來源關係（docs/05 §5.4）；不寫入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IndependenceRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IndependenceResult' }
+
+  /source-origins/{origin_id}:
+    parameters:
+      - { name: origin_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getSourceOrigin
+      tags: [evidence]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SourceOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /origin-relations:
+    post:
+      operationId: createOriginRelation
+      tags: [evidence]
+      summary: 人工判定兩個根來源的關係（INDEPENDENT 必須附佐證）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OriginRelationCreate' }
+      responses:
+        '201':
+          description: 已建立，並重新評估受影響的評估
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OriginRelation' }
+        '409':
+          description: 兩個根來源之間已經有 ACTIVE 的關係紀錄
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /origin-relations/{relation_id}:retract:
+    parameters:
+      - { name: relation_id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: retractOriginRelation
+      tags: [evidence]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleRequest' }
+      responses:
+        '200':
+          description: 已撤回，並重新評估
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReassessResult' }
+
+  /assessments/{assessment_id}:
+    parameters:
+      - { name: assessment_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getAssessment
+      tags: [assessments]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assessment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assessments:reassess:
+    post:
+      operationId: reassess
+      tags: [assessments]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReassessRequest' }
+      responses:
+        '200':
+          description: 重新評估完成（MVP 同步執行）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReassessResult' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /properties:
+    get:
+      operationId: listProperties
+      tags: [identity]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/PropertyStatus' } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Property' } }
+
+  /properties:export:
+    get:
+      operationId: exportProperties
+      tags: [identity]
+      responses:
+        '200':
+          description: CSV（UTF-8 BOM）；欄位受來源 republish 權利限制
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /properties:merge:
+    post:
+      operationId: mergeProperties
+      tags: [identity]
+      summary: 人工合併（必須附理由與佐證）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MergeRequest' }
+      responses:
+        '201':
+          description: 合併完成
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeOperation' }
+        '409':
+          description: 有衝突條件（F1–F7）；要強制合併，需要 override_conflicts 並寫明理由
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /properties/{property_id}:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      operationId: getProperty
+      tags: [identity]
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PropertyDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /properties/{property_id}/history:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      operationId: getPropertyHistory
+      tags: [identity]
+      responses:
+        '200':
+          description: 成員歷史與相關操作
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [memberships, operations]
+                properties:
+                  memberships: { type: array, items: { $ref: '#/components/schemas/PropertyMembership' } }
+                  operations: { type: array, items: { $ref: '#/components/schemas/MergeOperation' } }
+
+  /properties/{property_id}:split:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    post:
+      operationId: splitProperty
+      tags: [identity]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SplitRequest' }
+            examples:
+              split:
+                value:
+                  groups: [[11], [17]]
+                  rationale: 'B2 與 B3 同為 12 樓、坪型相同，但照片中的陽台方向不同'
+                  evidence_ids: [901]
+      responses:
+        '201':
+          description: 拆分完成；受影響的評估已經重新計算
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeOperation' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /identity-matches:
+    get:
+      operationId: listIdentityMatches
+      tags: [identity]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/IdentityMatchStatus' } }
+        - { name: listing_id, in: query, schema: { type: integer } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/IdentityMatch' } }
+
+  /identity-matches/{match_id}:
+    parameters:
+      - { name: match_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getIdentityMatch
+      tags: [identity]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityMatch' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /merge-operations/{operation_id}:
+    parameters:
+      - { name: operation_id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getMergeOperation
+      tags: [identity]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeOperation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /merge-operations/{operation_id}:revert:
+    parameters:
+      - { name: operation_id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: revertMergeOperation
+      tags: [identity]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleRequest' }
+      responses:
+        '201':
+          description: 撤回完成（產生 op_type = REVERT 的新操作）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeOperation' }
+        '409':
+          description: 之後的操作依賴這次操作（DEPENDENT_OPERATIONS），或這次操作已經被撤回
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /review-tasks:
+    get:
+      operationId: listReviewTasks
+      tags: [reviews]
+      parameters:
+        - { name: task_type, in: query, schema: { $ref: '#/components/schemas/ReviewTaskType' } }
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, RESOLVED, OBSOLETE], default: OPEN } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: 依 task_type 區分的覆核任務
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ReviewTask' } }
+
+  /review-tasks/{task_id}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      operationId: getReviewTask
+      tags: [reviews]
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewTask' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /review-tasks/{task_id}/decisions:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      operationId: submitReviewDecision
+      tags: [reviews]
+      summary: 送出覆核決定；必須帶 If-Match（任務版本），避免過期覆核
+      description: |
+        decision 必須屬於該 task_type 允許的集合（見 docs/05 §4），否則回 422 DECISION_NOT_ALLOWED。
+        任務所依據的評估已被取代 → 任務版本已改變 → 412。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecision' }
+            examples:
+              setUnit:
+                summary: 直接門牌證據＋刊登連結證據（H1–H6 可以成立）
+                value:
+                  decision: SET_UNIT
+                  address_unit_id: 302
+                  rationale: '由刊登 591#123456 的仲介帶看，現場門牌是 79 號 12 樓'
+                  new_evidence:
+                    - field: full_address
+                      value: { address_text: '高鐵南路一段79號12樓' }
+                      description: '現場門牌照片（只存描述與雜湊）'
+                      observed_at: '2026-11-01T06:00:00Z'
+                      evidence_role: DIRECT_ADDRESS
+                      derivation_type: ORIGINAL
+                      capture: { captured_by: user, captured_at: '2026-11-01T06:00:00Z', method: PHOTO }
+                      asserting_party: { type: USER, key: user }
+                      content_hash: 'sha256:9f1c'
+                    - field: listing_identity
+                      value: { listing_id: 11 }
+                      description: '帶看仲介出示的刊登編號與看房單'
+                      observed_at: '2026-11-01T06:00:00Z'
+                      evidence_role: LISTING_LINKAGE
+                      derivation_type: ORIGINAL
+                      capture: { captured_by: user, captured_at: '2026-11-01T06:00:00Z', method: SITE_VISIT_NOTE }
+                      asserting_party: { type: USER, key: user }
+                      link_method: AGENT_VIEWING_WITH_LISTING_REF
+                      linked_listing: { listing_id: 11, listing_ref_seen: '591#123456' }
+              abstain:
+                value: { decision: ABSTAIN, rationale: '三戶坪型相同，照片無法區分' }
+      responses:
+        '201':
+          description: 已記錄，並完成重新評估
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /reviews/{review_id}:retract:
+    parameters:
+      - { name: review_id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: retractReview
+      tags: [reviews]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleRequest' }
+      responses:
+        '200':
+          description: 已撤回；該次覆核產生的 HUMAN_ASSERTION 證據改成 RETRACTED，並重新評估
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+        '409':
+          description: 已經撤回
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      parameters:
+        - { name: event_type, in: query, schema: { $ref: '#/components/schemas/EventType' } }
+        - { name: schema_version, in: query, description: '指定 payload 版本（破壞性變更並行期間使用）', schema: { type: integer, minimum: 1 } }
+        - { name: listing_id, in: query, schema: { type: integer } }
+        - { name: property_id, in: query, schema: { type: integer } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Event' } }
+
+  /alert-rules:
+    get:
+      operationId: listAlertRules
+      tags: [alerts]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AlertRule' } }
+    post:
+      operationId: createAlertRule
+      tags: [alerts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertRuleCreate' }
+      responses:
+        '201':
+          description: 已建立
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertRule' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /alert-rules/{rule_id}:
+    parameters:
+      - { name: rule_id, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: patchAlertRule
+      tags: [alerts]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/AlertRulePatch' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertRule' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+    delete:
+      operationId: deleteAlertRule
+      tags: [alerts]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: 已刪除；歷史通知保留 }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [alerts]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/NotificationStatus' } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+
+  /sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Source' } }
+
+  /sources/{source_id}:
+    parameters:
+      - $ref: '#/components/parameters/SourceId'
+    patch:
+      operationId: patchSource
+      tags: [sources]
+      description: 要把 auto_fetch_enabled 設為 true 時，伺服器會檢查 docs/03 §5 的條件，不符合就回 409 SOURCE_NOT_ELIGIBLE。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/SourcePatch' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Source' }
+        '409':
+          description: 不符合啟用條件
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  /sources/{source_id}/runs:
+    parameters:
+      - $ref: '#/components/parameters/SourceId'
+    get:
+      operationId: listFetchRuns
+      tags: [sources]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/FetchRun' } }
+    post:
+      operationId: triggerFetchRun
+      tags: [sources]
+      summary: 觸發一輪擷取（只限已啟用的來源）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run_type]
+              properties:
+                run_type: { type: string, enum: [BASELINE, MANUAL_TRIGGER] }
+      responses:
+        '202':
+          description: 已排入
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FetchRun' }
+        '409':
+          description: 來源未啟用，或已有執行中的輪次
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  headers:
+    ETag:
+      description: 資源版本，格式 "v{version}"
+      schema: { type: string, pattern: '^"v[0-9]+"$' }
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: 範圍是 (API key, method, route, path 參數)；保存 24 小時；同一個 key 但內容不同 → 422 IDEMPOTENCY_KEY_REUSED；處理中 → 409
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 同 IdempotencyKey，但這個操作必須帶；缺少時回 400 IDEMPOTENCY_KEY_REQUIRED
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 資源目前的 ETag；不一致 → 412；缺少 → 428
+      schema: { type: string, pattern: '^"v[0-9]+"$' }
+    ListingId:
+      name: listing_id
+      in: path
+      required: true
+      schema: { type: integer }
+    PropertyId:
+      name: property_id
+      in: path
+      required: true
+      schema: { type: integer }
+    SourceId:
+      name: source_id
+      in: path
+      required: true
+      schema: { type: integer }
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    BadRequest:
+      description: 請求格式錯誤（例如缺少必填 header）
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: 缺少或錯誤的 API key
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: 找不到資源
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: 內容驗證失敗（包括條件必填、不允許的 null、Idempotency-Key 重用但內容不同）
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            setUnitMissingId:
+              value:
+                type: 'https://jev.local/problems/validation-error'
+                title: Validation failed
+                status: 422
+                code: VALIDATION_ERROR
+                errors: [{ field: address_unit_id, message: 'decision=SET_UNIT 時必填，而且不得為 null' }]
+    PreconditionFailed:
+      description: If-Match 版本不一致（資源已經被更新，或覆核任務依據的評估已經被取代）
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            staleReview:
+              value:
+                type: 'https://jev.local/problems/stale-version'
+                title: Precondition failed
+                status: 412
+                code: STALE_VERSION
+                detail: '任務 #7 目前版本為 "v3"，請求帶的是 "v2"'
+                current_etag: '"v3"'
+    PreconditionRequired:
+      description: 缺少 If-Match
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    # ---------- 通用 ----------
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details，並加上 code 欄位
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum: [VALIDATION_ERROR, NOT_FOUND, UNAUTHORIZED, LISTING_EXISTS, STALE_VERSION, PRECONDITION_REQUIRED,
+                 IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, DECISION_NOT_ALLOWED,
+                 MERGE_CONFLICT, DEPENDENT_OPERATIONS, ALREADY_DONE, SOURCE_NOT_ELIGIBLE, RUN_IN_PROGRESS]
+        detail: { type: string }
+        instance: { type: string }
+        current_etag: { type: string }
+        existing_listing_id: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Page:
+      type: object
+      required: [next_cursor]
+      properties:
+        next_cursor: { type: [string, 'null'] }
+
+    Rationale:
+      type: string
+      minLength: 5
+      maxLength: 2000
+
+    RationaleRequest:
+      type: object
+      required: [rationale]
+      additionalProperties: false
+      properties:
+        rationale: { $ref: '#/components/schemas/Rationale' }
+
+    Health:
+      type: object
+      required: [status, db, sources]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        db: { type: string, enum: [ok, error] }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [code, auto_fetch_enabled, last_run_status, last_run_coverage, consecutive_failures]
+            properties:
+              code: { type: string }
+              auto_fetch_enabled: { type: boolean }
+              last_run_status: { oneOf: [{ $ref: '#/components/schemas/FetchRunStatus' }, { type: 'null' }] }
+              last_run_coverage: { oneOf: [{ $ref: '#/components/schemas/Coverage' }, { type: 'null' }] }
+              consecutive_failures: { type: integer, minimum: 0 }
+
+    # ---------- 名冊 ----------
+    RecordStatus:
+      type: string
+      enum: [VERIFIED, TRANSCRIBED_UNVERIFIED, INFERRED, HYPOTHETICAL, CONFLICTING, RETRACTED]
+
+    MappingType:
+      type: string
+      enum: [SALES_UNIT_TO_NUMBER, DWELLING_TO_ADDRESS, SALES_UNIT_TO_BUILDING, SALES_UNIT_TO_UNIT_TYPE]
+
+    Community:
+      type: object
+      required: [id, code, name, city, district, area_name, aliases, current_registry_version_id]
+      properties:
+        id: { type: integer }
+        code: { type: string, examples: [lianshang-world] }
+        name: { type: string, examples: [聯上世界] }
+        city: { type: string, examples: [桃園市] }
+        district: { type: string, examples: [大園區] }
+        area_name: { type: string, examples: [青埔] }
+        aliases: { type: array, items: { type: string } }
+        current_registry_version_id: { type: integer }
+
+    Building:
+      type: object
+      required: [id, label, floors_above, record_status]
+      properties:
+        id: { type: integer }
+        label: { type: string }
+        floors_above: { type: [integer, 'null'] }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    UnitType:
+      type: object
+      required: [id, code, area_ping_min, area_ping_max, parking_basis, rooms, halls, baths, record_status]
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        area_ping_min: { type: number }
+        area_ping_max: { type: number }
+        parking_basis: { $ref: '#/components/schemas/ParkingIncluded' }
+        rooms: { type: [integer, 'null'] }
+        halls: { type: [integer, 'null'] }
+        baths: { type: [integer, 'null'] }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    SalesUnit:
+      type: object
+      required: [id, code, building_id, unit_type_id, orientation, record_status]
+      properties:
+        id: { type: integer }
+        code: { type: string, examples: [A1] }
+        building_id: { type: [integer, 'null'] }
+        unit_type_id: { type: [integer, 'null'] }
+        orientation: { type: [string, 'null'] }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    Dwelling:
+      type: object
+      required: [id, sales_unit_id, floor, record_status]
+      properties:
+        id: { type: integer }
+        sales_unit_id: { type: integer }
+        floor: { type: integer }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    AddressPrecision:
+      type: string
+      enum: [FLOOR, NUMBER, LANE, ROAD, NONE]
+
+    NormalizedAddress:
+      type: object
+      required: [city, district, road, section, lane, alley, number, number_sub, floor, floor_sub, precision, addr_key]
+      properties:
+        city: { type: [string, 'null'] }
+        district: { type: [string, 'null'] }
+        road: { type: [string, 'null'] }
+        section: { type: [integer, 'null'] }
+        lane: { type: [string, 'null'] }
+        alley: { type: [string, 'null'] }
+        number: { type: [integer, 'null'] }
+        number_sub: { type: [integer, 'null'] }
+        floor: { type: [string, 'null'] }
+        floor_sub: { type: [integer, 'null'] }
+        precision: { $ref: '#/components/schemas/AddressPrecision' }
+        addr_key: { type: [string, 'null'] }
+
+    AddressUnit:
+      type: object
+      required: [id, raw_address, normalized, origin, record_status]
+      properties:
+        id: { type: integer }
+        raw_address: { type: string }
+        normalized: { $ref: '#/components/schemas/NormalizedAddress' }
+        origin: { type: string, enum: [PRIOR_TRANSCRIPTION, GOV_DATASET, SALES_CONTROL_TABLE, USER_OBSERVATION, LISTING] }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    RegistryMapping:
+      type: object
+      required: [id, registry_version_id, mapping_type, from_type, from_id, to_type, to_id, record_status, version, evidence_ids]
+      properties:
+        id: { type: integer }
+        registry_version_id: { type: integer }
+        mapping_type: { $ref: '#/components/schemas/MappingType' }
+        from_type: { type: string, enum: [SALES_UNIT, DWELLING] }
+        from_id: { type: integer }
+        to_type: { type: string, enum: [ADDRESS_UNIT, BUILDING, UNIT_TYPE] }
+        to_id: { type: integer }
+        record_status: { $ref: '#/components/schemas/RecordStatus' }
+        version: { type: integer }
+        evidence_ids: { type: array, items: { type: integer } }
+
+    RegistryCoverage:
+      type: object
+      required: [registry_version_id, scope_type, scope_key, dimension, completeness]
+      properties:
+        registry_version_id: { type: integer }
+        scope_type: { type: string, enum: [ROAD_SEGMENT, BUILDING, SALES_UNIT] }
+        scope_key: { type: string, examples: ['高鐵南路|1|77-109|odd'] }
+        dimension: { type: string, enum: [ADDRESS, FLOOR, UNIT_TYPE, DWELLING], description: '只表示資料完整度；FLOOR = 哪些樓層有住宅的清單完整度，不代表門牌推導規則正確' }
+        completeness: { type: string, enum: [COMPLETE, PARTIAL, UNKNOWN] }
+
+    RuleException:
+      type: object
+      required: [floor_min, floor_max, sales_unit_ids, exception_type]
+      additionalProperties: false
+      properties:
+        floor_min: { type: integer }
+        floor_max: { type: integer }
+        sales_unit_ids: { type: array, items: { type: integer }, description: '空陣列 = 規則範圍內全部戶別' }
+        exception_type: { type: string, enum: [SHOP, NO_DWELLING, MERGED_UNIT, DIFFERENT_NUMBER] }
+        override_number: { type: [integer, 'null'] }
+        note: { type: [string, 'null'] }
+      if:
+        properties: { exception_type: { const: DIFFERENT_NUMBER } }
+      then:
+        required: [override_number]
+        properties: { override_number: { type: integer } }
+
+    DerivationRuleFields:
+      type: object
+      required: [scope_type, scope_ids, floor_min, floor_max, rule_type, floor_label_format, exceptions]
+      properties:
+        scope_type: { type: string, enum: [COMMUNITY, BUILDING, SALES_UNIT] }
+        scope_ids: { type: array, items: { type: integer } }
+        floor_min: { type: integer, description: '必填；不得只因知道總樓高就填 1' }
+        floor_max: { type: integer }
+        rule_type: { type: string, enum: [SAME_NUMBER_ALL_FLOORS, EXPLICIT_LIST] }
+        floor_label_format: { type: [string, 'null'], examples: ['{floor}樓'] }
+        exceptions: { type: array, items: { $ref: '#/components/schemas/RuleException' } }
+      allOf:
+        - if:
+            properties: { scope_type: { const: COMMUNITY } }
+          then:
+            properties: { scope_ids: { maxItems: 0 } }
+          else:
+            properties: { scope_ids: { minItems: 1 } }
+        - if:
+            properties: { rule_type: { const: SAME_NUMBER_ALL_FLOORS } }
+          then:
+            properties: { floor_label_format: { type: string, minLength: 1 } }
+
+    DerivationRuleCreate:
+      allOf:
+        - $ref: '#/components/schemas/DerivationRuleFields'
+        - type: object
+          required: [rationale, evidence_ids]
+          properties:
+            rationale: { $ref: '#/components/schemas/Rationale' }
+            evidence_ids: { type: array, minItems: 1, items: { type: integer } }
+            supersedes_rule_id: { type: [integer, 'null'] }
+      unevaluatedProperties: false
+
+    DerivationRule:
+      allOf:
+        - $ref: '#/components/schemas/DerivationRuleFields'
+        - type: object
+          required: [id, registry_version_id, record_status, supersedes_rule_id, evidence_ids, version, created_at]
+          properties:
+            id: { type: integer }
+            registry_version_id: { type: integer }
+            record_status: { $ref: '#/components/schemas/RecordStatus' }
+            supersedes_rule_id: { type: [integer, 'null'] }
+            evidence_ids: { type: array, items: { type: integer } }
+            version: { type: integer }
+            created_at: { type: string, format: date-time }
+
+    ImportResult:
+      type: object
+      required: [fetch_run_id, received, created, updated, skipped_duplicates, errors]
+      properties:
+        fetch_run_id: { type: [integer, 'null'] }
+        registry_version_id: { type: [integer, 'null'] }
+        received: { type: integer }
+        created: { type: integer }
+        updated: { type: integer }
+        skipped_duplicates: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [row, message]
+            properties:
+              row: { type: integer }
+              message: { type: string }
+
+    # ---------- 來源與輪次 ----------
+    RightsLevel:
+      type: string
+      enum: [ALLOWED, RESTRICTED, PROHIBITED, UNKNOWN]
+
+    Rights:
+      type: object
+      required: [acquire, store, image_use, republish]
+      properties:
+        acquire: { $ref: '#/components/schemas/RightsLevel' }
+        store: { $ref: '#/components/schemas/RightsLevel' }
+        image_use: { $ref: '#/components/schemas/RightsLevel' }
+        republish: { $ref: '#/components/schemas/RightsLevel' }
+
+    AccessMethod:
+      type: string
+      enum: [PUBLIC_WEB, AUTHORIZED_API, AUTHORIZED_ACCOUNT, MANUAL_ONLY, NOT_ALLOWED]
+
+    Compliance:
+      type: object
+      properties:
+        terms_url: { type: [string, 'null'] }
+        terms_summary: { type: [string, 'null'] }
+        robots_allows_paths: { type: [boolean, 'null'], description: 'null 代表待查證' }
+        max_requests_per_minute: { type: [integer, 'null'] }
+        checked_by: { type: [string, 'null'] }
+        checked_at: { type: [string, 'null'], format: date-time }
+        next_review_due: { type: [string, 'null'], format: date }
+
+    Source:
+      type: object
+      required: [id, code, name, priority, access_method, rights, auto_fetch_enabled, min_interval_sec,
+                 canonical_scope_fingerprint, baseline_completed_at, compliance, version]
+      properties:
+        id: { type: integer }
+        code: { type: string, examples: [SRC-591, SRC-LEJU, SRC-MANUAL] }
+        name: { type: string }
+        priority: { type: string, enum: [PRIMARY, SECONDARY] }
+        access_method: { $ref: '#/components/schemas/AccessMethod' }
+        rights: { $ref: '#/components/schemas/Rights' }
+        auto_fetch_enabled: { type: boolean }
+        min_interval_sec: { type: integer, minimum: 10 }
+        canonical_scope_fingerprint: { type: [string, 'null'] }
+        baseline_completed_at: { type: [string, 'null'], format: date-time }
+        compliance: { $ref: '#/components/schemas/Compliance' }
+        version: { type: integer }
+
+    SourcePatch:
+      type: object
+      description: JSON Merge Patch；省略 = 不變。auto_fetch_enabled、min_interval_sec、access_method、rights 不可為 null
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        auto_fetch_enabled: { type: boolean }
+        min_interval_sec: { type: integer, minimum: 10 }
+        access_method: { $ref: '#/components/schemas/AccessMethod' }
+        rights: { $ref: '#/components/schemas/Rights' }
+        compliance: { $ref: '#/components/schemas/Compliance' }
+        canonical_scope_fingerprint: { type: [string, 'null'] }
+
+    FetchRunStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, PARTIAL, FAILED, SKIPPED, CANCELLED]
+
+    Coverage:
+      type: string
+      enum: [PENDING, COMPLETE, INCOMPLETE, NOT_APPLICABLE]
+
+    CoverageReason:
+      type: string
+      enum: [RUN_NOT_SUCCEEDED, PAGE_CAP_HIT, PAGINATION_NOT_EXHAUSTED, LIST_PARSE_FAILURE, SCOPE_CHANGED,
+             COUNT_MISMATCH, TRUNCATED_RESULT, SUSPICIOUS_EMPTY, MANUAL_IMPORT]
+
+    ImportMode:
+      type: string
+      enum: [INITIAL, INCREMENTAL]
+
+    FetchRun:
+      type: object
+      required: [id, source_id, run_type, status, coverage, coverage_reasons, import_mode, query_fingerprint,
+                 pages_fetched, page_cap_hit, pagination_exhausted, reported_total, enumerated_count,
+                 list_parse_failures, detail_failures, started_at, finished_at, error_summary]
+      properties:
+        id: { type: integer }
+        source_id: { type: integer }
+        run_type: { type: string, enum: [BASELINE, SCHEDULED, MANUAL_TRIGGER, MANUAL_IMPORT] }
+        status: { $ref: '#/components/schemas/FetchRunStatus' }
+        coverage: { $ref: '#/components/schemas/Coverage' }
+        coverage_reasons: { type: array, items: { $ref: '#/components/schemas/CoverageReason' } }
+        import_mode: { oneOf: [{ $ref: '#/components/schemas/ImportMode' }, { type: 'null' }] }
+        query_fingerprint: { type: [string, 'null'] }
+        pages_fetched: { type: integer }
+        page_cap_hit: { type: boolean }
+        pagination_exhausted: { type: boolean }
+        reported_total: { type: [integer, 'null'] }
+        enumerated_count: { type: integer }
+        list_parse_failures: { type: integer }
+        detail_failures: { type: integer }
+        started_at: { type: [string, 'null'], format: date-time }
+        finished_at: { type: [string, 'null'], format: date-time }
+        error_summary: { type: [string, 'null'] }
+
+    # ---------- 刊登 ----------
+    ListingStatus:
+      type: string
+      enum: [ACTIVE, MISSING, DELISTED]
+
+    DealType:
+      type: string
+      enum: [SALE, RENT]
+
+    ParkingIncluded:
+      type: string
+      enum: [INCLUDED, EXCLUDED, UNKNOWN]
+
+    SnapshotInput:
+      description: 人工觀測輸入；不允許未定義欄位
+      allOf:
+        - $ref: '#/components/schemas/SnapshotFields'
+      unevaluatedProperties: false
+
+    SnapshotFields:
+      type: object
+      required: [total_price]
+      properties:
+        total_price: { type: integer, minimum: 1, description: 元 }
+        parking_price: { type: [integer, 'null'] }
+        parking_included: { $ref: '#/components/schemas/ParkingIncluded' }
+        building_ping: { type: [number, 'null'], description: 權狀坪 }
+        main_ping: { type: [number, 'null'] }
+        parking_ping: { type: [number, 'null'] }
+        floor_text: { type: [string, 'null'], examples: ['12F/24F', '中樓層'] }
+        total_floors: { type: [integer, 'null'] }
+        rooms: { type: [integer, 'null'] }
+        halls: { type: [integer, 'null'] }
+        baths: { type: [integer, 'null'] }
+        orientation: { type: [string, 'null'] }
+        age_years: { type: [number, 'null'] }
+        address_text: { type: [string, 'null'] }
+        community_text: { type: [string, 'null'] }
+        platform_community_ref: { type: [string, 'null'], description: '例如平台社區編號' }
+        sales_unit_text: { type: [string, 'null'], examples: [A2] }
+        title: { type: [string, 'null'] }
+        posted_at: { type: [string, 'null'], format: date-time }
+
+    FloorObservation:
+      type: object
+      required: [floor_text, floor_min, floor_max, floor_exact]
+      properties:
+        floor_text: { type: [string, 'null'] }
+        floor_min: { type: [integer, 'null'] }
+        floor_max: { type: [integer, 'null'] }
+        floor_exact: { type: boolean, description: '只有明寫單一樓層時才是 true；模糊樓層不能轉成確定樓層' }
+
+    Snapshot:
+      allOf:
+        - $ref: '#/components/schemas/SnapshotFields'
+        - $ref: '#/components/schemas/FloorObservation'
+        - type: object
+          required: [id, listing_id, observed_at, content_hash, address_precision, fetch_run_id, source_document_id, raw_available]
+          properties:
+            id: { type: integer }
+            listing_id: { type: integer }
+            observed_at: { type: string, format: date-time }
+            content_hash: { type: string }
+            address_precision: { $ref: '#/components/schemas/AddressPrecision' }
+            fetch_run_id: { type: [integer, 'null'] }
+            source_document_id: { type: [integer, 'null'] }
+            raw_available: { type: boolean }
+            parser_version: { type: [string, 'null'] }
+      unevaluatedProperties: false
+
+    EvidenceOrigin:
+      type: object
+      description: 人工記錄的原始出處（沿用該出處的權利設定）
+      required: [origin_source_code]
+      properties:
+        origin_source_code: { type: string }
+        url: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+
+    ListingCreate:
+      type: object
+      required: [source_code, snapshot]
+      additionalProperties: false
+      properties:
+        source_code: { type: string }
+        external_id: { type: [string, 'null'], minLength: 1 }
+        url: { type: [string, 'null'], minLength: 1 }
+        deal_type: { $ref: '#/components/schemas/DealType' }
+        lister_type: { type: string, enum: [AGENT, OWNER, UNKNOWN], default: UNKNOWN }
+        lister_company: { type: [string, 'null'] }
+        import_mode: { $ref: '#/components/schemas/ImportMode' }
+        is_new_listing: { type: [boolean, 'null'] }
+        evidence_origin: { $ref: '#/components/schemas/EvidenceOrigin' }
+        snapshot: { $ref: '#/components/schemas/SnapshotInput' }
+      if:
+        properties:
+          source_code: { not: { const: SRC-MANUAL } }
+      then:
+        anyOf:
+          - required: [external_id]
+            properties: { external_id: { type: string } }
+          - required: [url]
+            properties: { url: { type: string } }
+      else:
+        required: [evidence_origin]
+
+    ListingImportRow:
+      description: CSV 欄位（第一列是標頭）；識別規則同 ListingCreate
+      type: object
+      required: [source_code, total_price]
+      properties:
+        source_code: { type: string }
+        external_id: { type: string }
+        url: { type: string }
+        origin_source_code: { type: string }
+        total_price: { type: integer }
+        parking_included: { $ref: '#/components/schemas/ParkingIncluded' }
+        building_ping: { type: number }
+        floor_text: { type: string }
+        total_floors: { type: integer }
+        rooms: { type: integer }
+        halls: { type: integer }
+        baths: { type: integer }
+        orientation: { type: string }
+        address_text: { type: string }
+        community_text: { type: string }
+        sales_unit_text: { type: string }
+        title: { type: string }
+        posted_at: { type: string, format: date-time }
+        is_new_listing: { type: boolean }
+
+    ListingPatch:
+      type: object
+      description: JSON Merge Patch。省略 = 不變；null = 清除。lister_type 不可為 null
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        url: { type: [string, 'null'] }
+        lister_type: { type: string, enum: [AGENT, OWNER, UNKNOWN] }
+        lister_company: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+
+    MarkDelistedRequest:
+      type: object
+      required: [reason, rationale]
+      additionalProperties: false
+      properties:
+        reason: { type: string, enum: [MARKED_SOLD, MARKED_REMOVED, MANUAL] }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+
+    ListingCycle:
+      type: object
+      required: [cycle_no, started_at, start_reason, ended_at, end_reason]
+      properties:
+        cycle_no: { type: integer, minimum: 1 }
+        started_at: { type: string, format: date-time }
+        start_reason: { type: string, enum: [FIRST_OBSERVED, RELISTED] }
+        ended_at: { type: [string, 'null'], format: date-time }
+        end_reason:
+          oneOf:
+            - { type: string, enum: [MISSING_IN_COMPLETE_RUNS, MARKED_SOLD, MARKED_REMOVED, MANUAL] }
+            - { type: 'null' }
+
+    Listing:
+      type: object
+      required: [id, source_code, external_id, external_id_origin, url, deal_type, status, current_cycle_no,
+                 consecutive_missing_complete_runs, first_observed_at, first_observed_context, new_listing_status,
+                 last_seen_at, lister_type, lister_company, property_id, membership_status, address_status, version]
+      properties:
+        id: { type: integer }
+        source_code: { type: string }
+        external_id: { type: string }
+        external_id_origin: { type: string, enum: [PLATFORM, URL_HASH, SYSTEM_GENERATED] }
+        url: { type: [string, 'null'] }
+        deal_type: { $ref: '#/components/schemas/DealType' }
+        status: { $ref: '#/components/schemas/ListingStatus' }
+        current_cycle_no: { type: integer, minimum: 1 }
+        consecutive_missing_complete_runs: { type: integer, minimum: 0 }
+        first_observed_at: { type: string, format: date-time }
+        first_observed_context: { type: string, enum: [BASELINE, INCREMENTAL, MANUAL_INITIAL, MANUAL_INCREMENTAL] }
+        new_listing_status: { type: string, enum: [CONFIRMED_NEW, NOT_NEW, UNCONFIRMED] }
+        last_seen_at: { type: string, format: date-time }
+        lister_type: { type: string, enum: [AGENT, OWNER, UNKNOWN] }
+        lister_company: { type: [string, 'null'] }
+        property_id: { type: integer }
+        membership_status: { oneOf: [{ $ref: '#/components/schemas/MembershipStatus' }, { type: 'null' }] }
+        address_status: { oneOf: [{ $ref: '#/components/schemas/AddressStatus' }, { type: 'null' }] }
+        version: { type: integer }
+
+    ListingDetail:
+      allOf:
+        - $ref: '#/components/schemas/Listing'
+        - type: object
+          required: [latest_snapshot, cycles, membership_assessment, address_assessment]
+          properties:
+            latest_snapshot: { oneOf: [{ $ref: '#/components/schemas/Snapshot' }, { type: 'null' }] }
+            cycles: { type: array, items: { $ref: '#/components/schemas/ListingCycle' } }
+            membership_assessment: { oneOf: [{ $ref: '#/components/schemas/Assessment' }, { type: 'null' }] }
+            address_assessment: { oneOf: [{ $ref: '#/components/schemas/Assessment' }, { type: 'null' }] }
+
+    # ---------- 證據 ----------
+    EvidenceKind:
+      type: string
+      enum: [SOURCE_FACT, INFERENCE, HUMAN_ASSERTION]
+
+    EvidenceStatus:
+      type: string
+      enum: [ACTIVE, STALE, SUPERSEDED, RETRACTED]
+
+    Locator:
+      type: object
+      required: [type, value]
+      properties:
+        type: { type: string, enum: [JSON_PATH, CSS_SELECTOR, TEXT_SPAN, IMAGE_REGION, TABLE_CELL, FREE_TEXT] }
+        value: { type: string }
+
+    EvidenceTargetType:
+      type: string
+      enum: [COMMUNITY_MEMBERSHIP, CANDIDATE, IDENTITY_MATCH, REGISTRY_MAPPING, DERIVATION_RULE]
+
+    EvidenceLink:
+      type: object
+      required: [target_type, target_id, target_field, stance, rule_code]
+      properties:
+        target_type: { $ref: '#/components/schemas/EvidenceTargetType' }
+        target_id: { type: integer }
+        target_field: { type: string }
+        stance: { type: string, enum: [SUPPORTS, REFUTES, NEUTRAL] }
+        rule_code: { type: [string, 'null'] }
+
+    EvidenceRole:
+      type: string
+      enum: [DIRECT_ADDRESS, DIRECT_UNIT, LISTING_LINKAGE, FEATURE_OBSERVATION, OTHER]
+
+    DerivationType:
+      type: string
+      enum: [ORIGINAL, COPY, REPOST, CROP, OCR, TRANSCRIPTION, REVIEW_CITATION, INFERENCE]
+
+    RefType:
+      type: string
+      enum: [EVIDENCE, IDENTITY_MATCH, REVIEW, ASSESSMENT, CANDIDATE, REGISTRY_MAPPING, DERIVATION_RULE, SOURCE_DOCUMENT]
+
+    DerivationRef:
+      type: object
+      description: 具型別的衍生參照；不接受沒有型別的整數 ID
+      required: [ref_type, id, role]
+      additionalProperties: false
+      properties:
+        ref_type: { $ref: '#/components/schemas/RefType' }
+        id: { type: integer }
+        role: { type: string, enum: [COPIED_FROM, EXTRACTED_FROM, CITES, INFERRED_FROM, VIA_MATCH] }
+
+    VersionedRef:
+      type: object
+      required: [ref_type, id, version]
+      additionalProperties: false
+      properties:
+        ref_type: { $ref: '#/components/schemas/RefType' }
+        id: { type: integer }
+        version: { type: integer, minimum: 1 }
+
+    LinkMethod:
+      type: string
+      enum: [AGENT_VIEWING_WITH_LISTING_REF, DOCUMENT_CITES_LISTING, INTERIOR_FEATURE_MATCH, OTHER]
+
+    Capture:
+      type: object
+      description: 原始觀測的取得資訊（H3）
+      required: [captured_by, captured_at, method]
+      additionalProperties: false
+      properties:
+        captured_by: { type: string, minLength: 1 }
+        captured_at: { type: string, format: date-time }
+        method: { type: string, enum: [PHOTO, DOCUMENT, SITE_VISIT_NOTE, AGENT_STATEMENT, SCREEN_RECORD, OTHER] }
+        location_note: { type: [string, 'null'] }
+
+    AssertingPartyType:
+      type: string
+      enum: [AGENT, OWNER, PLATFORM, USER, GOVERNMENT, BUILDER, SYSTEM, UNKNOWN]
+
+    Evidence:
+      type: object
+      required: [id, kind, origin, listing_id, snapshot_id, source_document_id, review_id, field, value, locator,
+                 excerpt, excerpt_hash, observed_at, evidence_role, derivation_type, derived_from, origin_ids, capture,
+                 link_method, content_hash, extractor_version, status, status_reason, superseded_by_id, raw_available,
+                 links, version]
+      properties:
+        id: { type: integer }
+        kind: { $ref: '#/components/schemas/EvidenceKind' }
+        origin: { type: string, enum: [LISTING_SNAPSHOT, SOURCE_DOCUMENT, PRIOR_TRANSCRIPTION, USER_OBSERVATION, REVIEW, RULE], description: '出處類型（不是根來源）' }
+        listing_id: { type: [integer, 'null'] }
+        snapshot_id: { type: [integer, 'null'] }
+        source_document_id: { type: [integer, 'null'] }
+        review_id: { type: [integer, 'null'], description: '只代表操作紀錄，不代表獨立來源' }
+        field: { type: string }
+        value: {}
+        locator: { $ref: '#/components/schemas/Locator' }
+        excerpt: { type: [string, 'null'], maxLength: 200 }
+        excerpt_hash: { type: [string, 'null'] }
+        observed_at: { type: string, format: date-time }
+        evidence_role: { $ref: '#/components/schemas/EvidenceRole' }
+        derivation_type: { $ref: '#/components/schemas/DerivationType' }
+        derived_from: { type: array, items: { $ref: '#/components/schemas/DerivationRef' } }
+        origin_ids: { type: array, minItems: 1, items: { type: integer }, description: '根來源集合（docs/05 §5.4）' }
+        capture: { oneOf: [{ $ref: '#/components/schemas/Capture' }, { type: 'null' }] }
+        link_method: { oneOf: [{ $ref: '#/components/schemas/LinkMethod' }, { type: 'null' }] }
+        content_hash: { type: [string, 'null'], description: '只作重複線索' }
+        extractor_version: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/EvidenceStatus' }
+        status_reason: { type: [string, 'null'], examples: [UPSTREAM_RETRACTED] }
+        superseded_by_id: { type: [integer, 'null'] }
+        raw_available: { type: boolean }
+        links: { type: array, items: { $ref: '#/components/schemas/EvidenceLink' } }
+        version: { type: integer }
+      allOf:
+        - if:
+            properties: { kind: { const: INFERENCE } }
+          then:
+            properties: { derivation_type: { const: INFERENCE } }
+        - if:
+            properties: { derivation_type: { not: { const: ORIGINAL } } }
+          then:
+            properties: { derived_from: { minItems: 1 } }
+
+    SourceOrigin:
+      type: object
+      required: [id, origin_type, asserting_party_type, asserting_party_key, captured_by, captured_at, root_content_hash, description]
+      properties:
+        id: { type: integer }
+        origin_type: { type: string, enum: [PLATFORM_LISTING, AGENT_STATEMENT, OWNER_STATEMENT, USER_SITE_VISIT, DOCUMENT, SALES_CONTROL_TABLE, GOV_RECORD, PRIOR_TRANSCRIPTION, SYSTEM] }
+        asserting_party_type: { $ref: '#/components/schemas/AssertingPartyType' }
+        asserting_party_key: { type: [string, 'null'] }
+        captured_by: { type: [string, 'null'] }
+        captured_at: { type: [string, 'null'], format: date-time }
+        root_content_hash: { type: [string, 'null'] }
+        description: { type: string }
+
+    OriginRelationType:
+      type: string
+      enum: [SAME, DEPENDENT, INDEPENDENT, UNKNOWN]
+
+    OriginRelation:
+      type: object
+      required: [id, origin_a_id, origin_b_id, relation, basis, rationale, evidence_ids, status, created_at]
+      properties:
+        id: { type: integer }
+        origin_a_id: { type: integer }
+        origin_b_id: { type: integer }
+        relation: { $ref: '#/components/schemas/OriginRelationType' }
+        basis: { type: string, enum: [RULE_I1, RULE_I2, RULE_I3, HUMAN_REVIEW] }
+        rationale: { type: string }
+        evidence_ids: { type: array, items: { type: integer } }
+        status: { type: string, enum: [ACTIVE, RETRACTED] }
+        created_at: { type: string, format: date-time }
+
+    OriginRelationCreate:
+      type: object
+      description: 人工判定兩個根來源的關係。UNKNOWN 是預設值，不需要建立；判定為 INDEPENDENT 必須附佐證
+      required: [origin_a_id, origin_b_id, relation, rationale]
+      additionalProperties: false
+      properties:
+        origin_a_id: { type: integer }
+        origin_b_id: { type: integer }
+        relation: { type: string, enum: [SAME, DEPENDENT, INDEPENDENT] }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+        evidence_ids: { type: array, items: { type: integer } }
+      if:
+        properties: { relation: { const: INDEPENDENT } }
+      then:
+        required: [evidence_ids]
+        properties: { evidence_ids: { minItems: 1 } }
+
+    IndependenceRequest:
+      type: object
+      required: [evidence_ids]
+      additionalProperties: false
+      properties:
+        evidence_ids: { type: array, minItems: 2, uniqueItems: true, items: { type: integer } }
+
+    IndependenceResult:
+      type: object
+      required: [pairs, independent_origin_count]
+      properties:
+        pairs:
+          type: array
+          items:
+            type: object
+            required: [evidence_a_id, evidence_b_id, relation, decided_by]
+            properties:
+              evidence_a_id: { type: integer }
+              evidence_b_id: { type: integer }
+              relation: { $ref: '#/components/schemas/OriginRelationType' }
+              decided_by: { type: string, enum: [SHARED_ORIGIN, SYSTEM_ORIGIN, RECORDED_RELATION, RULE_I1, RULE_I2, RULE_I3, DEFAULT_UNKNOWN] }
+        independent_origin_count: { type: integer, minimum: 1, description: '彼此 INDEPENDENT 的最大根來源群數；UNKNOWN 不算獨立' }
+
+    DependentsResult:
+      type: object
+      required: [dependent_evidence_ids, affected_assessment_ids]
+      properties:
+        dependent_evidence_ids: { type: array, items: { type: integer } }
+        affected_assessment_ids: { type: array, items: { type: integer } }
+
+    UserEvidenceInput:
+      type: object
+      description: |
+        使用者提供的佐證；系統建立為 HUMAN_ASSERTION（origin = USER_OBSERVATION）。
+        ORIGINAL 必須有 capture（會建立新的根來源）；其他衍生方式必須有 derived_from（沿用上游的根來源）。
+        LISTING_LINKAGE 必須說明 link_method 與所連結的刊登；INTERIOR_FEATURE_MATCH 至少列出 2 個比對特徵。
+      required: [field, value, description, observed_at, evidence_role, derivation_type]
+      additionalProperties: false
+      properties:
+        field: { type: string }
+        value: {}
+        description: { type: string, minLength: 5 }
+        observed_at: { type: string, format: date-time }
+        origin_source_code: { type: [string, 'null'] }
+        url: { type: [string, 'null'] }
+        evidence_role: { $ref: '#/components/schemas/EvidenceRole' }
+        derivation_type: { type: string, enum: [ORIGINAL, TRANSCRIPTION, OCR, CROP, REVIEW_CITATION] }
+        derived_from: { type: array, items: { $ref: '#/components/schemas/DerivationRef' } }
+        capture: { $ref: '#/components/schemas/Capture' }
+        asserting_party:
+          type: object
+          required: [type, key]
+          properties:
+            type: { $ref: '#/components/schemas/AssertingPartyType' }
+            key: { type: [string, 'null'] }
+        content_hash: { type: [string, 'null'] }
+        link_method: { $ref: '#/components/schemas/LinkMethod' }
+        linked_listing:
+          type: object
+          required: [listing_id, listing_ref_seen]
+          properties:
+            listing_id: { type: integer }
+            listing_ref_seen: { type: string, minLength: 1, description: '現場或文件中看到的刊登編號或網址' }
+        matched_features: { type: array, items: { type: string, minLength: 2 } }
+      allOf:
+        - if:
+            properties: { derivation_type: { const: ORIGINAL } }
+          then:
+            required: [capture]
+          else:
+            required: [derived_from]
+            properties: { derived_from: { minItems: 1 } }
+        - if:
+            required: [evidence_role]
+            properties: { evidence_role: { const: LISTING_LINKAGE } }
+          then:
+            required: [link_method, linked_listing]
+        - if:
+            required: [link_method]
+            properties: { link_method: { const: INTERIOR_FEATURE_MATCH } }
+          then:
+            required: [matched_features]
+            properties: { matched_features: { minItems: 2 } }
+
+    EvidenceCreate:
+      allOf:
+        - $ref: '#/components/schemas/UserEvidenceInput'
+        - type: object
+          required: [listing_id, links]
+          properties:
+            listing_id: { type: [integer, 'null'] }
+            links:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [target_type, target_id, target_field, stance]
+                properties:
+                  target_type: { $ref: '#/components/schemas/EvidenceTargetType' }
+                  target_id: { type: integer }
+                  target_field: { type: string }
+                  stance: { type: string, enum: [SUPPORTS, REFUTES, NEUTRAL] }
+
+    # ---------- 評估 ----------
+    SubjectType:
+      type: string
+      enum: [COMMUNITY_MEMBERSHIP, ADDRESS_RESOLUTION, LISTING_MATCH]
+
+    MembershipStatus:
+      type: string
+      enum: [MEMBER, LIKELY_MEMBER, NON_MEMBER, UNDETERMINED, CONFLICTING]
+
+    AddressStatus:
+      type: string
+      enum: [CONFIRMED, SINGLE_CANDIDATE, MULTIPLE_CANDIDATES, INSUFFICIENT_INFO, NO_CANDIDATE, CONFLICTING, ABSTAINED, NOT_EVALUATED]
+
+    MatchOutcome:
+      type: string
+      enum: [AUTO_MERGE_ELIGIBLE, REVIEW_REQUIRED, CANDIDATE_ONLY, CONFLICTING]
+
+    FieldStatus:
+      type: string
+      enum: [CONFIRMED, NARROWED, AMBIGUOUS, UNKNOWN, CONFLICTING]
+
+    FieldResolution:
+      type: object
+      required: [status, value, basis, evidence_ids]
+      properties:
+        status: { $ref: '#/components/schemas/FieldStatus' }
+        value: { description: 'status 是 CONFIRMED 或 NARROWED 時才有值，其他情況為 null' }
+        basis: { type: [string, 'null'], enum: [SYSTEM_RULES, HUMAN_REVIEW, null], description: '只有 CONFIRMED 時必填' }
+        evidence_ids: { type: array, items: { type: integer } }
+      if:
+        properties: { status: { const: CONFIRMED } }
+      then:
+        properties:
+          basis: { type: string }
+          evidence_ids: { minItems: 1 }
+
+    ResolvedFields:
+      type: object
+      required: [building, sales_unit, floor, address_number, full_address]
+      properties:
+        building: { $ref: '#/components/schemas/FieldResolution' }
+        sales_unit: { $ref: '#/components/schemas/FieldResolution' }
+        floor: { $ref: '#/components/schemas/FieldResolution' }
+        address_number: { $ref: '#/components/schemas/FieldResolution' }
+        full_address: { $ref: '#/components/schemas/FieldResolution' }
+
+    RuleHit:
+      type: object
+      required: [rule_code, effect, evidence_ids]
+      properties:
+        rule_code: { type: string, examples: [M2, X1, S3, P1] }
+        effect: { type: [number, 'null'], description: '分數增減；決定性或排除規則為 null' }
+        decisive: { type: boolean, default: false }
+        evidence_ids: { type: array, items: { type: integer } }
+
+    ScoredCandidate:
+      type: object
+      required: [candidate_id, dwelling_id, address_unit_id, generated_by, rule_score, excluded, excluded_by_rule, rule_hits]
+      properties:
+        candidate_id: { type: integer }
+        dwelling_id: { type: [integer, 'null'] }
+        address_unit_id: { type: [integer, 'null'] }
+        generated_by: { type: string, enum: [G1, G2, G3] }
+        rule_score: { type: number, minimum: 0, maximum: 1 }
+        excluded: { type: boolean }
+        excluded_by_rule: { type: [string, 'null'] }
+        rule_hits: { type: array, items: { $ref: '#/components/schemas/RuleHit' } }
+
+    AssessmentBase:
+      type: object
+      required: [id, subject_type, listing_id, identity_match_id, snapshot_id, ruleset_version, registry_version_id,
+                 evidence_set_hash, evidence_ids, registry_items_used, rule_score, calibrated_probability,
+                 calibration_version, basis, flags, trigger, status, superseded_by_id, created_at]
+      properties:
+        id: { type: integer }
+        subject_type: { $ref: '#/components/schemas/SubjectType' }
+        listing_id: { type: [integer, 'null'] }
+        identity_match_id: { type: [integer, 'null'] }
+        snapshot_id: { type: [integer, 'null'] }
+        ruleset_version: { type: string }
+        registry_version_id: { type: integer }
+        evidence_set_hash: { type: string }
+        evidence_ids: { type: array, items: { type: integer } }
+        registry_items_used: { type: array, items: { $ref: '#/components/schemas/VersionedRef' }, description: '評估用到的名冊 mapping 與推導規則（含版本）' }
+        rule_score: { type: [number, 'null'], minimum: 0, maximum: 1, description: '規則分數，不是機率' }
+        calibrated_probability: { type: 'null', description: '未校準前固定為 null；校準後的版本才會放寬' }
+        calibration_version: { type: 'null' }
+        basis: { type: string, enum: [SYSTEM_RULES, HUMAN_REVIEW] }
+        flags: { type: array, items: { type: string, enum: [REGISTRY_GAP, MAPPING_DISPUTE, INTERNAL_INCONSISTENCY, STALE_EVIDENCE] } }
+        trigger: { type: string, enum: [NEW_SNAPSHOT, EVIDENCE_CHANGED, REGISTRY_UPDATED, REVIEW, REVIEW_RETRACTED, MERGE, SPLIT, REVERT, RULESET_UPDATED, MANUAL] }
+        status: { type: string, enum: [CURRENT, SUPERSEDED] }
+        superseded_by_id: { type: [integer, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    MembershipAssessment:
+      allOf:
+        - $ref: '#/components/schemas/AssessmentBase'
+        - type: object
+          required: [subject_type, outcome, rule_hits]
+          properties:
+            subject_type: { const: COMMUNITY_MEMBERSHIP }
+            outcome: { $ref: '#/components/schemas/MembershipStatus' }
+            rule_hits: { type: array, items: { $ref: '#/components/schemas/RuleHit' } }
+
+    AddressAssessment:
+      allOf:
+        - $ref: '#/components/schemas/AssessmentBase'
+        - type: object
+          required: [subject_type, outcome, resolved_fields, candidate_count, candidates]
+          properties:
+            subject_type: { const: ADDRESS_RESOLUTION }
+            outcome: { $ref: '#/components/schemas/AddressStatus' }
+            resolved_fields: { $ref: '#/components/schemas/ResolvedFields' }
+            candidate_count: { type: integer, minimum: 0 }
+            candidates: { type: array, items: { $ref: '#/components/schemas/ScoredCandidate' }, description: 'G4 時為空陣列，只回報 candidate_count' }
+
+    MatchAssessment:
+      allOf:
+        - $ref: '#/components/schemas/AssessmentBase'
+        - type: object
+          required: [subject_type, outcome, conflicts, rule_hits]
+          properties:
+            subject_type: { const: LISTING_MATCH }
+            outcome: { $ref: '#/components/schemas/MatchOutcome' }
+            conflicts: { type: array, items: { type: string, enum: [F1, F2, F3, F4, F5, F6, F7] } }
+            rule_hits: { type: array, items: { $ref: '#/components/schemas/RuleHit' } }
+
+    Assessment:
+      oneOf:
+        - $ref: '#/components/schemas/MembershipAssessment'
+        - $ref: '#/components/schemas/AddressAssessment'
+        - $ref: '#/components/schemas/MatchAssessment'
+      discriminator:
+        propertyName: subject_type
+        mapping:
+          COMMUNITY_MEMBERSHIP: '#/components/schemas/MembershipAssessment'
+          ADDRESS_RESOLUTION: '#/components/schemas/AddressAssessment'
+          LISTING_MATCH: '#/components/schemas/MatchAssessment'
+
+    ReassessRequest:
+      type: object
+      required: [subject_types, rationale]
+      additionalProperties: false
+      properties:
+        listing_ids: { type: array, items: { type: integer }, minItems: 1 }
+        property_id: { type: integer }
+        all_in_community: { type: boolean, const: true }
+        subject_types: { type: array, minItems: 1, items: { $ref: '#/components/schemas/SubjectType' } }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+      oneOf:
+        - required: [listing_ids]
+        - required: [property_id]
+        - required: [all_in_community]
+
+    ReassessResult:
+      type: object
+      required: [new_assessment_ids, superseded_assessment_ids, changed_listing_ids, event_ids]
+      properties:
+        new_assessment_ids: { type: array, items: { type: integer } }
+        superseded_assessment_ids: { type: array, items: { type: integer } }
+        changed_listing_ids: { type: array, items: { type: integer } }
+        event_ids: { type: array, items: { type: string } }
+
+    # ---------- 同屋 ----------
+    PropertyStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+
+    Property:
+      type: object
+      required: [id, status, resolved_dwelling_id, current_min_price, active_listing_count, listing_ids, first_seen_at, version]
+      properties:
+        id: { type: integer }
+        status: { $ref: '#/components/schemas/PropertyStatus' }
+        resolved_dwelling_id: { type: [integer, 'null'] }
+        current_min_price: { type: [integer, 'null'] }
+        active_listing_count: { type: integer, minimum: 0 }
+        listing_ids: { type: array, items: { type: integer }, minItems: 1 }
+        first_seen_at: { type: string, format: date-time }
+        version: { type: integer }
+
+    PropertyDetail:
+      allOf:
+        - $ref: '#/components/schemas/Property'
+        - type: object
+          required: [listings, price_history]
+          properties:
+            listings: { type: array, items: { $ref: '#/components/schemas/Listing' } }
+            price_history:
+              type: array
+              items:
+                type: object
+                required: [observed_at, min_total_price]
+                properties:
+                  observed_at: { type: string, format: date-time }
+                  min_total_price: { type: integer }
+
+    PropertyMembership:
+      type: object
+      required: [property_id, listing_id, valid_from, valid_to, operation_id]
+      properties:
+        property_id: { type: integer }
+        listing_id: { type: integer }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: [string, 'null'], format: date-time }
+        operation_id: { type: [integer, 'null'] }
+
+    IdentityMatchStatus:
+      type: string
+      enum: [CANDIDATE, AUTO_MERGED, CONFIRMED, REJECTED, REVERTED]
+
+    IdentityMatch:
+      type: object
+      required: [id, listing_a_id, listing_b_id, status, current_assessment_id, conflicts, version]
+      properties:
+        id: { type: integer }
+        listing_a_id: { type: integer }
+        listing_b_id: { type: integer }
+        status: { $ref: '#/components/schemas/IdentityMatchStatus' }
+        current_assessment_id: { type: [integer, 'null'] }
+        conflicts: { type: array, items: { type: string, enum: [F1, F2, F3, F4, F5, F6, F7] } }
+        version: { type: integer }
+
+    MergeRequest:
+      type: object
+      required: [property_ids, rationale]
+      additionalProperties: false
+      properties:
+        property_ids: { type: array, items: { type: integer }, minItems: 2, uniqueItems: true }
+        expected_versions:
+          type: object
+          description: 'property_id → version；任何一個不一致就回 412'
+          additionalProperties: { type: integer }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+        evidence_ids: { type: array, items: { type: integer } }
+        new_evidence: { type: array, items: { $ref: '#/components/schemas/UserEvidenceInput' } }
+        override_conflicts: { type: boolean, default: false }
+      anyOf:
+        - required: [evidence_ids]
+          properties: { evidence_ids: { minItems: 1 } }
+        - required: [new_evidence]
+          properties: { new_evidence: { minItems: 1 } }
+
+    SplitRequest:
+      type: object
+      required: [groups, rationale]
+      additionalProperties: false
+      properties:
+        groups:
+          type: array
+          minItems: 2
+          items: { type: array, minItems: 1, items: { type: integer } }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+        evidence_ids: { type: array, items: { type: integer } }
+
+    MergeOperation:
+      type: object
+      required: [id, op_type, actor, rationale, ruleset_version, identity_match_id, reverts_operation_id, affected, evidence_ids, created_at]
+      properties:
+        id: { type: integer }
+        op_type: { type: string, enum: [AUTO_MERGE, MANUAL_MERGE, SPLIT, REVERT] }
+        actor: { type: string, enum: [SYSTEM, USER] }
+        rationale: { type: string }
+        ruleset_version: { type: string }
+        identity_match_id: { type: [integer, 'null'] }
+        reverts_operation_id: { type: [integer, 'null'] }
+        affected:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [listing_id, from_property_id, to_property_id]
+            properties:
+              listing_id: { type: integer }
+              from_property_id: { type: integer }
+              to_property_id: { type: integer }
+        evidence_ids: { type: array, items: { type: integer } }
+        reassessment: { $ref: '#/components/schemas/ReassessResult' }
+        created_at: { type: string, format: date-time }
+
+    # ---------- 覆核 ----------
+    ReviewTaskType:
+      type: string
+      enum: [COMMUNITY_MEMBERSHIP, ADDRESS_CANDIDATE, LISTING_MATCH, REGISTRY_MAPPING, DERIVATION_RULE]
+
+    ReviewTaskBase:
+      type: object
+      required: [id, task_type, status, priority, base_assessment_id, version, created_at]
+      properties:
+        id: { type: integer }
+        task_type: { $ref: '#/components/schemas/ReviewTaskType' }
+        status: { type: string, enum: [OPEN, RESOLVED, OBSOLETE] }
+        priority: { type: integer, minimum: 1, maximum: 5 }
+        base_assessment_id: { type: [integer, 'null'] }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    MembershipReviewTask:
+      allOf:
+        - $ref: '#/components/schemas/ReviewTaskBase'
+        - type: object
+          required: [task_type, listing_id, assessment]
+          properties:
+            task_type: { const: COMMUNITY_MEMBERSHIP }
+            listing_id: { type: integer }
+            assessment: { $ref: '#/components/schemas/MembershipAssessment' }
+
+    AddressCandidateReviewTask:
+      allOf:
+        - $ref: '#/components/schemas/ReviewTaskBase'
+        - type: object
+          required: [task_type, listing_id, assessment]
+          properties:
+            task_type: { const: ADDRESS_CANDIDATE }
+            listing_id: { type: integer }
+            assessment: { $ref: '#/components/schemas/AddressAssessment' }
+
+    ListingMatchReviewTask:
+      allOf:
+        - $ref: '#/components/schemas/ReviewTaskBase'
+        - type: object
+          required: [task_type, identity_match, assessment]
+          properties:
+            task_type: { const: LISTING_MATCH }
+            identity_match: { $ref: '#/components/schemas/IdentityMatch' }
+            assessment: { $ref: '#/components/schemas/MatchAssessment' }
+
+    DerivationRuleReviewTask:
+      allOf:
+        - $ref: '#/components/schemas/ReviewTaskBase'
+        - type: object
+          required: [task_type, rule]
+          properties:
+            task_type: { const: DERIVATION_RULE }
+            rule: { $ref: '#/components/schemas/DerivationRule' }
+
+    RegistryMappingReviewTask:
+      allOf:
+        - $ref: '#/components/schemas/ReviewTaskBase'
+        - type: object
+          required: [task_type, mapping]
+          properties:
+            task_type: { const: REGISTRY_MAPPING }
+            mapping: { $ref: '#/components/schemas/RegistryMapping' }
+
+    ReviewTask:
+      oneOf:
+        - $ref: '#/components/schemas/MembershipReviewTask'
+        - $ref: '#/components/schemas/AddressCandidateReviewTask'
+        - $ref: '#/components/schemas/ListingMatchReviewTask'
+        - $ref: '#/components/schemas/RegistryMappingReviewTask'
+        - $ref: '#/components/schemas/DerivationRuleReviewTask'
+      discriminator:
+        propertyName: task_type
+        mapping:
+          COMMUNITY_MEMBERSHIP: '#/components/schemas/MembershipReviewTask'
+          ADDRESS_CANDIDATE: '#/components/schemas/AddressCandidateReviewTask'
+          LISTING_MATCH: '#/components/schemas/ListingMatchReviewTask'
+          REGISTRY_MAPPING: '#/components/schemas/RegistryMappingReviewTask'
+          DERIVATION_RULE: '#/components/schemas/DerivationRuleReviewTask'
+
+    DecisionBase:
+      type: object
+      required: [decision, rationale]
+      properties:
+        decision: { type: string }
+        rationale: { $ref: '#/components/schemas/Rationale' }
+        evidence_ids: { type: array, items: { type: integer } }
+        new_evidence: { type: array, items: { $ref: '#/components/schemas/UserEvidenceInput' } }
+
+    RequiresSupport:
+      description: |
+        確認類決定必須附至少一筆佐證（既有證據或新的使用者證據）。
+        這只是 schema 層的最低要求；佐證是否「充分」由伺服器依 docs/06 §5.2（H1–H6）判定，結果寫在 Review.support_assessment。
+      anyOf:
+        - required: [evidence_ids]
+          properties: { evidence_ids: { minItems: 1 } }
+        - required: [new_evidence]
+          properties: { new_evidence: { minItems: 1 } }
+
+    DecisionConfirmMember:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - properties: { decision: { const: CONFIRM_MEMBER } }
+    DecisionConfirmNonMember:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - properties: { decision: { const: CONFIRM_NON_MEMBER } }
+    DecisionConfirmCandidate:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - required: [candidate_id]
+          properties:
+            decision: { const: CONFIRM_CANDIDATE }
+            candidate_id: { type: integer }
+    DecisionRejectCandidate:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - required: [candidate_id]
+          properties:
+            decision: { const: REJECT_CANDIDATE }
+            candidate_id: { type: integer }
+    DecisionSetUnit:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - required: [address_unit_id]
+          properties:
+            decision: { const: SET_UNIT }
+            address_unit_id: { type: integer, description: '必填，不得為 null' }
+            dwelling_id: { type: [integer, 'null'] }
+    DecisionMarkInsufficient:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - properties: { decision: { const: MARK_INSUFFICIENT } }
+    DecisionConfirmSame:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - properties: { decision: { const: CONFIRM_SAME } }
+    DecisionRejectSame:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - properties: { decision: { const: REJECT_SAME } }
+    DecisionVerifyMapping:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - properties: { decision: { const: VERIFY_MAPPING } }
+    DecisionRejectMapping:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - properties: { decision: { const: REJECT_MAPPING } }
+    DecisionVerifyRule:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - $ref: '#/components/schemas/RequiresSupport'
+        - properties: { decision: { const: VERIFY_RULE } }
+    DecisionRejectRule:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - properties: { decision: { const: REJECT_RULE } }
+    DecisionAbstain:
+      allOf:
+        - $ref: '#/components/schemas/DecisionBase'
+        - properties: { decision: { const: ABSTAIN } }
+
+    ReviewDecision:
+      oneOf:
+        - $ref: '#/components/schemas/DecisionConfirmMember'
+        - $ref: '#/components/schemas/DecisionConfirmNonMember'
+        - $ref: '#/components/schemas/DecisionConfirmCandidate'
+        - $ref: '#/components/schemas/DecisionRejectCandidate'
+        - $ref: '#/components/schemas/DecisionSetUnit'
+        - $ref: '#/components/schemas/DecisionMarkInsufficient'
+        - $ref: '#/components/schemas/DecisionConfirmSame'
+        - $ref: '#/components/schemas/DecisionRejectSame'
+        - $ref: '#/components/schemas/DecisionVerifyMapping'
+        - $ref: '#/components/schemas/DecisionRejectMapping'
+        - $ref: '#/components/schemas/DecisionVerifyRule'
+        - $ref: '#/components/schemas/DecisionRejectRule'
+        - $ref: '#/components/schemas/DecisionAbstain'
+      discriminator:
+        propertyName: decision
+        mapping:
+          CONFIRM_MEMBER: '#/components/schemas/DecisionConfirmMember'
+          CONFIRM_NON_MEMBER: '#/components/schemas/DecisionConfirmNonMember'
+          CONFIRM_CANDIDATE: '#/components/schemas/DecisionConfirmCandidate'
+          REJECT_CANDIDATE: '#/components/schemas/DecisionRejectCandidate'
+          SET_UNIT: '#/components/schemas/DecisionSetUnit'
+          MARK_INSUFFICIENT: '#/components/schemas/DecisionMarkInsufficient'
+          CONFIRM_SAME: '#/components/schemas/DecisionConfirmSame'
+          REJECT_SAME: '#/components/schemas/DecisionRejectSame'
+          VERIFY_MAPPING: '#/components/schemas/DecisionVerifyMapping'
+          REJECT_MAPPING: '#/components/schemas/DecisionRejectMapping'
+          VERIFY_RULE: '#/components/schemas/DecisionVerifyRule'
+          REJECT_RULE: '#/components/schemas/DecisionRejectRule'
+          ABSTAIN: '#/components/schemas/DecisionAbstain'
+
+    SupportAssessment:
+      type: object
+      description: 伺服器對佐證是否充分的判定（docs/06 §5.2）；不是使用者輸入
+      required: [result, unmet_conditions, confirmed_fields]
+      properties:
+        result: { type: string, enum: [SUFFICIENT, INSUFFICIENT, NOT_APPLICABLE] }
+        unmet_conditions: { type: array, items: { type: string, enum: [H1, H2, H3, H4, H5, H6] } }
+        confirmed_fields: { type: array, items: { type: string, enum: [full_address, address_number, floor, sales_unit, building] } }
+      allOf:
+        - if:
+            properties: { result: { const: SUFFICIENT } }
+          then:
+            properties:
+              unmet_conditions: { maxItems: 0 }
+              confirmed_fields: { minItems: 1 }
+        - if:
+            properties: { result: { const: INSUFFICIENT } }
+          then:
+            properties:
+              unmet_conditions: { minItems: 1 }
+              confirmed_fields: { maxItems: 0 }
+
+    Review:
+      type: object
+      required: [id, task_id, decision, rationale, actor, base_assessment_id, result_assessment_id, candidate_id,
+                 address_unit_id, cited_evidence_ids, created_evidence_ids, support_assessment, status,
+                 supersedes_review_id, retraction_rationale, created_at]
+      properties:
+        id: { type: integer }
+        task_id: { type: integer }
+        support_assessment: { $ref: '#/components/schemas/SupportAssessment' }
+        decision: { type: string, enum: [CONFIRM_MEMBER, CONFIRM_NON_MEMBER, CONFIRM_CANDIDATE, REJECT_CANDIDATE, SET_UNIT, MARK_INSUFFICIENT, CONFIRM_SAME, REJECT_SAME, VERIFY_MAPPING, REJECT_MAPPING, VERIFY_RULE, REJECT_RULE, ABSTAIN] }
+        rationale: { type: string }
+        actor: { type: string, enum: [USER] }
+        base_assessment_id: { type: [integer, 'null'] }
+        result_assessment_id: { type: [integer, 'null'] }
+        candidate_id: { type: [integer, 'null'] }
+        address_unit_id: { type: [integer, 'null'] }
+        cited_evidence_ids: { type: array, items: { type: integer } }
+        created_evidence_ids: { type: array, items: { type: integer } }
+        status: { type: string, enum: [ACTIVE, SUPERSEDED, RETRACTED] }
+        supersedes_review_id: { type: [integer, 'null'] }
+        retraction_rationale: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    # ---------- 事件 ----------
+    EventType:
+      type: string
+      enum: [LISTING_FIRST_OBSERVED, LISTING_NEW_CONFIRMED, DWELLING_NEW_LISTING, LISTING_RELISTED,
+             LISTING_PRICE_CHANGED, LISTING_FIELDS_CHANGED, LISTING_DELISTED, PROPERTY_MERGED, PROPERTY_SPLIT,
+             MERGE_REVERTED, COMMUNITY_MEMBERSHIP_CHANGED, ADDRESS_ASSESSMENT_CHANGED, SOURCE_HEALTH_CHANGED,
+             REGISTRY_UPDATED]
+
+    NullableId: { type: [integer, 'null'] }
+
+    SuppressionReason:
+      type: string
+      enum: [BASELINE_CONTEXT, MANUAL_INITIAL_CONTEXT, NOT_CONFIRMED_NEW, INTERNAL_EVENT]
+
+    EventEnvelope:
+      type: object
+      description: 事件一律保存（稽核）；notify_eligible 只決定 Notifier 是否會拿它比對通知規則
+      required: [event_id, event_type, schema_version, idempotency_key, occurred_at, recorded_at, subject, caused_by,
+                 notify_eligible, suppression_reason, payload]
+      if:
+        properties: { notify_eligible: { const: true } }
+      then:
+        properties: { suppression_reason: { type: 'null' } }
+      else:
+        properties: { suppression_reason: { $ref: '#/components/schemas/SuppressionReason' } }
+      properties:
+        notify_eligible: { type: boolean }
+        suppression_reason: { oneOf: [{ $ref: '#/components/schemas/SuppressionReason' }, { type: 'null' }] }
+        event_id: { type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$' }
+        event_type: { $ref: '#/components/schemas/EventType' }
+        schema_version: { type: integer, minimum: 1 }
+        idempotency_key: { type: string, minLength: 3 }
+        occurred_at: { type: string, format: date-time }
+        recorded_at: { type: string, format: date-time }
+        subject:
+          type: object
+          required: [listing_id, property_id, source_id]
+          properties:
+            listing_id: { $ref: '#/components/schemas/NullableId' }
+            property_id: { $ref: '#/components/schemas/NullableId' }
+            source_id: { $ref: '#/components/schemas/NullableId' }
+        caused_by:
+          type: object
+          required: [fetch_run_id, snapshot_id, operation_id, review_id, assessment_id]
+          properties:
+            fetch_run_id: { $ref: '#/components/schemas/NullableId' }
+            snapshot_id: { $ref: '#/components/schemas/NullableId' }
+            operation_id: { $ref: '#/components/schemas/NullableId' }
+            review_id: { $ref: '#/components/schemas/NullableId' }
+            assessment_id: { $ref: '#/components/schemas/NullableId' }
+        payload: { type: object }
+
+    SubjectListing:
+      properties:
+        subject: { required: [listing_id], properties: { listing_id: { type: integer } } }
+    SubjectListingProperty:
+      properties:
+        subject: { required: [listing_id, property_id], properties: { listing_id: { type: integer }, property_id: { type: integer } } }
+    SubjectProperty:
+      properties:
+        subject: { required: [property_id], properties: { property_id: { type: integer } } }
+    SubjectSource:
+      properties:
+        subject: { required: [source_id], properties: { source_id: { type: integer } } }
+
+    ListingFirstObservedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: false }
+            event_type: { const: LISTING_FIRST_OBSERVED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^first_observed:[0-9]+$' }
+            payload:
+              type: object
+              required: [context, new_listing_status, cycle_no, snapshot_id]
+              properties:
+                context: { type: string, enum: [BASELINE, INCREMENTAL, MANUAL_INITIAL, MANUAL_INCREMENTAL] }
+                new_listing_status: { type: string, enum: [CONFIRMED_NEW, NOT_NEW, UNCONFIRMED] }
+                cycle_no: { const: 1 }
+                snapshot_id: { type: [integer, 'null'] }
+                total_price: { type: [integer, 'null'] }
+        - if:
+            properties: { payload: { properties: { context: { const: BASELINE } } } }
+          then:
+            properties: { suppression_reason: { const: BASELINE_CONTEXT } }
+        - if:
+            properties: { payload: { properties: { context: { const: MANUAL_INITIAL } } } }
+          then:
+            properties: { suppression_reason: { const: MANUAL_INITIAL_CONTEXT } }
+
+    ListingNewConfirmedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: LISTING_NEW_CONFIRMED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^new_confirmed:[0-9]+$' }
+            payload:
+              type: object
+              required: [cycle_no, snapshot_id, confirmation_basis, late_confirmation]
+              properties:
+                cycle_no: { type: integer, minimum: 1 }
+                snapshot_id: { type: integer }
+                confirmation_basis: { type: string, enum: [COMPLETE_RUN_DIFF, POSTED_AT, USER_FLAG] }
+                late_confirmation: { type: boolean }
+                total_price: { type: [integer, 'null'] }
+
+    DwellingNewListingEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListingProperty'
+        - description: |
+            同一住宅「真正新增」的刊登。只有加入群組的刊登本身是 CONFIRMED_NEW（不是 BASELINE、MANUAL_INITIAL）時才會產生。
+            冪等鍵 = dwelling_new_listing:{listing_id}：每則刊登一生最多一次，不依賴可變的群組成員或 operation_id。
+            之後的拆分、撤回或改併到其他群組，只發更正通知（Notification.notification_kind = CORRECTION），不重發新案。
+            anchor_listing_id 只是發出當時的參考資訊，不參與去重。
+          properties:
+            notify_eligible: { const: true }
+            event_type: { const: DWELLING_NEW_LISTING }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^dwelling_new_listing:[0-9]+$' }
+            payload:
+              type: object
+              required: [anchor_listing_id, other_listing_ids, joining_listing_context, new_listing_status, trigger,
+                         trigger_operation_id, property_was_inactive]
+              properties:
+                anchor_listing_id: { type: integer }
+                other_listing_ids: { type: array, minItems: 1, items: { type: integer } }
+                joining_listing_context: { type: string, enum: [INCREMENTAL, MANUAL_INCREMENTAL], description: '初始化資料（BASELINE、MANUAL_INITIAL）不可能產生此事件' }
+                new_listing_status: { const: CONFIRMED_NEW }
+                trigger: { type: string, enum: [MERGE, NEW_LISTING_CONFIRMED], description: '合併與新刊登確認，兩者都成立的那一刻才發出' }
+                trigger_operation_id: { type: [integer, 'null'] }
+                property_was_inactive: { type: boolean }
+                total_price: { type: [integer, 'null'] }
+
+    ListingRelistedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: LISTING_RELISTED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^relisted:[0-9]+:[0-9]+$' }
+            payload:
+              type: object
+              required: [previous_cycle_no, cycle_no, delisted_at, snapshot_id]
+              properties:
+                previous_cycle_no: { type: integer, minimum: 1 }
+                cycle_no: { type: integer, minimum: 2 }
+                delisted_at: { type: string, format: date-time }
+                snapshot_id: { type: [integer, 'null'] }
+                previous_last_price: { type: [integer, 'null'] }
+                total_price: { type: [integer, 'null'] }
+
+    ListingPriceChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: LISTING_PRICE_CHANGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^price:[0-9]+:[0-9]+$' }
+            payload:
+              type: object
+              required: [cycle_no, from_snapshot_id, to_snapshot_id, old_price, new_price, diff, pct, direction]
+              properties:
+                cycle_no: { type: integer, minimum: 1 }
+                from_snapshot_id: { type: integer }
+                to_snapshot_id: { type: integer }
+                old_price: { type: integer, minimum: 1 }
+                new_price: { type: integer, minimum: 1 }
+                diff: { type: integer }
+                pct: { type: number }
+                direction: { type: string, enum: [DOWN, UP] }
+
+    ListingFieldsChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: LISTING_FIELDS_CHANGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^fields:[0-9]+:[0-9]+$' }
+            payload:
+              type: object
+              required: [cycle_no, from_snapshot_id, to_snapshot_id, changed_fields]
+              properties:
+                cycle_no: { type: integer, minimum: 1 }
+                from_snapshot_id: { type: integer }
+                to_snapshot_id: { type: integer }
+                changed_fields:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [field, old, new]
+                    properties:
+                      field: { type: string }
+                      old: {}
+                      new: {}
+
+    ListingDelistedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: LISTING_DELISTED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^delisted:[0-9]+:[0-9]+$' }
+            payload:
+              type: object
+              required: [cycle_no, reason, last_snapshot_id, last_seen_at, missing_complete_run_ids]
+              properties:
+                cycle_no: { type: integer, minimum: 1 }
+                reason: { type: string, enum: [MISSING_IN_COMPLETE_RUNS, MARKED_SOLD, MARKED_REMOVED, MANUAL] }
+                last_snapshot_id: { type: [integer, 'null'] }
+                last_seen_at: { type: string, format: date-time }
+                missing_complete_run_ids: { type: array, items: { type: integer } }
+                evidence_document_id: { type: [integer, 'null'] }
+                days_listed: { type: [integer, 'null'] }
+              if:
+                properties: { reason: { const: MISSING_IN_COMPLETE_RUNS } }
+              then:
+                properties: { missing_complete_run_ids: { minItems: 2 } }
+
+    PropertyMergedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectProperty'
+        - description: 系統發現新的同屋關係（合併）。一律保存，不通知；是否有真正新增的刊登，另由 DWELLING_NEW_LISTING 表達
+          properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: PROPERTY_MERGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^property_merged:[0-9]+$' }
+            payload:
+              type: object
+              required: [operation_id, op_type, into_property_id, merged_property_ids, listing_ids, initial_context_listing_ids, new_listing_ids]
+              properties:
+                operation_id: { type: integer }
+                op_type: { type: string, enum: [AUTO_MERGE, MANUAL_MERGE] }
+                into_property_id: { type: integer }
+                merged_property_ids: { type: array, minItems: 1, items: { type: integer } }
+                listing_ids: { type: array, minItems: 2, items: { type: integer } }
+                initial_context_listing_ids: { type: array, items: { type: integer }, description: '群組中來自 BASELINE 或 MANUAL_INITIAL 的刊登' }
+                new_listing_ids: { type: array, items: { type: integer }, description: '因這次合併而第一次發出 DWELLING_NEW_LISTING 的刊登（已發過的不再列入；可能為空）' }
+                identity_match_id: { type: [integer, 'null'] }
+
+    PropertySplitEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectProperty'
+        - properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: PROPERTY_SPLIT }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^property_split:[0-9]+$' }
+            payload:
+              type: object
+              required: [operation_id, groups]
+              properties:
+                operation_id: { type: integer }
+                groups:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: object
+                    required: [property_id, listing_ids]
+                    properties:
+                      property_id: { type: integer }
+                      listing_ids: { type: array, minItems: 1, items: { type: integer } }
+
+    MergeRevertedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectProperty'
+        - properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: MERGE_REVERTED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^merge_reverted:[0-9]+$' }
+            payload:
+              type: object
+              required: [operation_id, reverted_operation_id, restored]
+              properties:
+                operation_id: { type: integer }
+                reverted_operation_id: { type: integer }
+                restored:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [listing_id, property_id]
+                    properties:
+                      listing_id: { type: integer }
+                      property_id: { type: integer }
+
+    CommunityMembershipChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: COMMUNITY_MEMBERSHIP_CHANGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^community_membership_changed:[0-9]+$' }
+            payload:
+              type: object
+              required: [assessment_id, previous_assessment_id, old_status, new_status, basis]
+              properties:
+                assessment_id: { type: integer }
+                previous_assessment_id: { type: [integer, 'null'] }
+                old_status: { oneOf: [{ $ref: '#/components/schemas/MembershipStatus' }, { type: 'null' }] }
+                new_status: { $ref: '#/components/schemas/MembershipStatus' }
+                rule_score: { type: [number, 'null'] }
+                basis: { type: string, enum: [SYSTEM_RULES, HUMAN_REVIEW] }
+
+    AddressAssessmentChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectListing'
+        - properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: ADDRESS_ASSESSMENT_CHANGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^address_assessment_changed:[0-9]+$' }
+            payload:
+              type: object
+              required: [assessment_id, previous_assessment_id, old_status, new_status, full_address_status, candidate_count, basis, trigger]
+              properties:
+                assessment_id: { type: integer }
+                previous_assessment_id: { type: [integer, 'null'] }
+                old_status: { oneOf: [{ $ref: '#/components/schemas/AddressStatus' }, { type: 'null' }] }
+                new_status: { $ref: '#/components/schemas/AddressStatus' }
+                full_address_status: { $ref: '#/components/schemas/FieldStatus' }
+                candidate_count: { type: integer, minimum: 0 }
+                top_candidate_id: { type: [integer, 'null'] }
+                basis: { type: string, enum: [SYSTEM_RULES, HUMAN_REVIEW] }
+                trigger: { type: string, enum: [NEW_SNAPSHOT, EVIDENCE_CHANGED, REGISTRY_UPDATED, REVIEW, REVIEW_RETRACTED, MERGE, SPLIT, REVERT, RULESET_UPDATED, MANUAL] }
+
+    SourceHealthChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - $ref: '#/components/schemas/SubjectSource'
+        - properties:
+            notify_eligible: { const: true }
+            event_type: { const: SOURCE_HEALTH_CHANGED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^source_health:[0-9]+:[0-9]+$' }
+            payload:
+              type: object
+              required: [old_health, new_health, consecutive_failures, fetch_run_id, auto_fetch_disabled]
+              properties:
+                old_health: { type: string, enum: [ok, degraded, down] }
+                new_health: { type: string, enum: [ok, degraded, down] }
+                consecutive_failures: { type: integer, minimum: 0 }
+                fetch_run_id: { type: integer }
+                auto_fetch_disabled: { type: boolean }
+
+    RegistryUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - description: 名冊（mapping、推導規則、涵蓋度等）有狀態變更，產生新的 registry_version
+          properties:
+            notify_eligible: { const: false }
+            suppression_reason: { const: INTERNAL_EVENT }
+            event_type: { const: REGISTRY_UPDATED }
+            schema_version: { const: 1 }
+            idempotency_key: { pattern: '^registry_updated:[0-9]+$' }
+            payload:
+              type: object
+              required: [registry_version_id, previous_registry_version_id, changes, affected_listing_ids]
+              properties:
+                registry_version_id: { type: integer }
+                previous_registry_version_id: { type: [integer, 'null'] }
+                changes:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [item_type, item_id, old_status, new_status]
+                    properties:
+                      item_type: { type: string, enum: [REGISTRY_MAPPING, DERIVATION_RULE, COVERAGE, DWELLING, ADDRESS_UNIT, SALES_UNIT, UNIT_TYPE, BUILDING] }
+                      item_id: { type: integer }
+                      old_status: { type: [string, 'null'] }
+                      new_status: { type: string }
+                affected_listing_ids: { type: array, items: { type: integer } }
+
+    Event:
+      oneOf:
+        - $ref: '#/components/schemas/ListingFirstObservedEvent'
+        - $ref: '#/components/schemas/ListingNewConfirmedEvent'
+        - $ref: '#/components/schemas/DwellingNewListingEvent'
+        - $ref: '#/components/schemas/ListingRelistedEvent'
+        - $ref: '#/components/schemas/ListingPriceChangedEvent'
+        - $ref: '#/components/schemas/ListingFieldsChangedEvent'
+        - $ref: '#/components/schemas/ListingDelistedEvent'
+        - $ref: '#/components/schemas/PropertyMergedEvent'
+        - $ref: '#/components/schemas/PropertySplitEvent'
+        - $ref: '#/components/schemas/MergeRevertedEvent'
+        - $ref: '#/components/schemas/CommunityMembershipChangedEvent'
+        - $ref: '#/components/schemas/AddressAssessmentChangedEvent'
+        - $ref: '#/components/schemas/SourceHealthChangedEvent'
+        - $ref: '#/components/schemas/RegistryUpdatedEvent'
+      discriminator:
+        propertyName: event_type
+        mapping:
+          REGISTRY_UPDATED: '#/components/schemas/RegistryUpdatedEvent'
+          LISTING_FIRST_OBSERVED: '#/components/schemas/ListingFirstObservedEvent'
+          LISTING_NEW_CONFIRMED: '#/components/schemas/ListingNewConfirmedEvent'
+          DWELLING_NEW_LISTING: '#/components/schemas/DwellingNewListingEvent'
+          LISTING_RELISTED: '#/components/schemas/ListingRelistedEvent'
+          LISTING_PRICE_CHANGED: '#/components/schemas/ListingPriceChangedEvent'
+          LISTING_FIELDS_CHANGED: '#/components/schemas/ListingFieldsChangedEvent'
+          LISTING_DELISTED: '#/components/schemas/ListingDelistedEvent'
+          PROPERTY_MERGED: '#/components/schemas/PropertyMergedEvent'
+          PROPERTY_SPLIT: '#/components/schemas/PropertySplitEvent'
+          MERGE_REVERTED: '#/components/schemas/MergeRevertedEvent'
+          COMMUNITY_MEMBERSHIP_CHANGED: '#/components/schemas/CommunityMembershipChangedEvent'
+          ADDRESS_ASSESSMENT_CHANGED: '#/components/schemas/AddressAssessmentChangedEvent'
+          SOURCE_HEALTH_CHANGED: '#/components/schemas/SourceHealthChangedEvent'
+
+    # ---------- 通知 ----------
+    Channel:
+      type: string
+      enum: [EMAIL, TELEGRAM]
+
+    NotificationStatus:
+      type: string
+      enum: [PENDING, SENT, FAILED]
+
+    AlertRuleCreate:
+      type: object
+      required: [name, event_types, channel]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1 }
+        enabled: { type: boolean, default: true }
+        event_types: { type: array, minItems: 1, items: { $ref: '#/components/schemas/EventType' } }
+        max_total_price: { type: [integer, 'null'] }
+        min_price_drop_pct: { type: [number, 'null'] }
+        min_rooms: { type: [integer, 'null'] }
+        min_building_ping: { type: [number, 'null'] }
+        membership_statuses:
+          type: array
+          items: { $ref: '#/components/schemas/MembershipStatus' }
+          default: [MEMBER, LIKELY_MEMBER]
+        channel: { $ref: '#/components/schemas/Channel' }
+        notify_corrections: { type: boolean, default: true }
+
+    AlertRulePatch:
+      type: object
+      description: JSON Merge Patch。name、enabled、event_types、channel、notify_corrections、membership_statuses 不可為 null；門檻欄位可以設為 null 來清除
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        enabled: { type: boolean }
+        event_types: { type: array, minItems: 1, items: { $ref: '#/components/schemas/EventType' } }
+        max_total_price: { type: [integer, 'null'] }
+        min_price_drop_pct: { type: [number, 'null'] }
+        min_rooms: { type: [integer, 'null'] }
+        min_building_ping: { type: [number, 'null'] }
+        membership_statuses: { type: array, items: { $ref: '#/components/schemas/MembershipStatus' } }
+        channel: { $ref: '#/components/schemas/Channel' }
+        notify_corrections: { type: boolean }
+
+    AlertRule:
+      type: object
+      required: [id, name, enabled, event_types, max_total_price, min_price_drop_pct, min_rooms, min_building_ping,
+                 membership_statuses, channel, notify_corrections, version]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        enabled: { type: boolean }
+        event_types: { type: array, items: { $ref: '#/components/schemas/EventType' } }
+        max_total_price: { type: [integer, 'null'] }
+        min_price_drop_pct: { type: [number, 'null'] }
+        min_rooms: { type: [integer, 'null'] }
+        min_building_ping: { type: [number, 'null'] }
+        membership_statuses: { type: array, items: { $ref: '#/components/schemas/MembershipStatus' } }
+        channel: { $ref: '#/components/schemas/Channel' }
+        notify_corrections: { type: boolean }
+        version: { type: integer }
+
+    Notification:
+      type: object
+      description: |
+        EVENT：由 notify_eligible = true 的事件觸發。
+        CORRECTION：先前已發的通知內容因拆分、撤回或改併群組而不再正確時發出（依 alert_rule.notify_corrections），
+        event_id 是觸發更正的事件（可能是 notify_eligible = false 的 PROPERTY_SPLIT 等），corrects_notification_id 指向原通知。
+      required: [id, notification_kind, alert_rule_id, event_id, channel, rendered, status, attempts, last_error, sent_at, corrects_notification_id]
+      if:
+        properties: { notification_kind: { const: CORRECTION } }
+      then:
+        properties: { corrects_notification_id: { type: integer } }
+      else:
+        properties: { corrects_notification_id: { type: 'null' } }
+      properties:
+        id: { type: integer }
+        notification_kind: { type: string, enum: [EVENT, CORRECTION] }
+        alert_rule_id: { type: integer }
+        event_id: { type: string }
+        channel: { $ref: '#/components/schemas/Channel' }
+        rendered: { type: object, description: '發送當時的內容快照（不可修改）' }
+        status: { $ref: '#/components/schemas/NotificationStatus' }
+        attempts: { type: integer, minimum: 0 }
+        last_error: { type: [string, 'null'] }
+        sent_at: { type: [string, 'null'], format: date-time }
+        corrects_notification_id: { type: [integer, 'null'] }

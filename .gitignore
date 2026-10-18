@@ -1,0 +1,13 @@
+# OS / 編輯器
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# 未來實作時的本機資料與密鑰（docs/09）
+.env
+data/
+logs/
+backups/
+__pycache__/

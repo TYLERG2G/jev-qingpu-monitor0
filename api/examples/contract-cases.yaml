@@ -1,0 +1,1000 @@
+# 契約案例：每一筆都指定 components.schemas 中的 schema，以及預期是否合法。
+# 用途：(1) 文件範例；(2) 日後契約測試的固定資料。本階段只用 jsonschema 做離線驗證（見 docs/15）。
+# 注意：這裡只驗證 schema（結構、必填、條件必填）。「佐證是否充分」「來源是否獨立」等業務規則由伺服器判定，
+#       對應 docs/10 的業務測試（規劃中，尚未執行），不在這裡宣稱通過。
+# 資料是虛構的測試資料；號碼取自【先前轉錄・待核對】的對照，只當格式示例。
+# v0.3：所有事件加上 notify_eligible／suppression_reason；新增人工確認、推導規則、來源獨立性、初始化通知相關案例。
+
+envelope_defaults:
+  nocause: &nocause { fetch_run_id: null, snapshot_id: null, operation_id: null, review_id: null, assessment_id: null }
+  photo_capture: &photo_capture { captured_by: user, captured_at: '2026-11-01T06:00:00Z', method: PHOTO }
+  visit_capture: &visit_capture { captured_by: user, captured_at: '2026-11-01T06:00:00Z', method: SITE_VISIT_NOTE }
+  user_party: &user_party { type: USER, key: user }
+
+cases:
+  # ---------------- ListingCreate ----------------
+  - id: C-LC-01
+    schema: ListingCreate
+    valid: true
+    note: SRC-MANUAL，沒有 external_id 與 url → 伺服器產生 man_<ULID>
+    data:
+      source_code: SRC-MANUAL
+      import_mode: INCREMENTAL
+      evidence_origin: { origin_source_code: SRC-591, url: null, note: 使用者瀏覽後記錄 }
+      snapshot: { total_price: 15800000, building_ping: 45.2, floor_text: 12F/24F, rooms: 3, halls: 2, baths: 2 }
+  - id: C-LC-02
+    schema: ListingCreate
+    valid: true
+    note: 平台來源，只有 external_id
+    data:
+      source_code: SRC-591
+      external_id: '123456'
+      snapshot: { total_price: 15800000 }
+  - id: C-LC-03
+    schema: ListingCreate
+    valid: false
+    note: 平台來源沒有 external_id，也沒有 url
+    data:
+      source_code: SRC-LEJU
+      snapshot: { total_price: 15800000 }
+  - id: C-LC-04
+    schema: ListingCreate
+    valid: false
+    note: 平台來源 url 為 null，也沒有 external_id
+    data:
+      source_code: SRC-591
+      url: null
+      snapshot: { total_price: 15800000 }
+  - id: C-LC-05
+    schema: ListingCreate
+    valid: false
+    note: SRC-MANUAL 沒有附原始出處
+    data:
+      source_code: SRC-MANUAL
+      snapshot: { total_price: 15800000 }
+  - id: C-LC-06
+    schema: ListingCreate
+    valid: false
+    note: 快照有未定義欄位
+    data:
+      source_code: SRC-591
+      external_id: '1'
+      snapshot: { total_price: 15800000, lister_phone: '0912xxxxxx' }
+  - id: C-LC-07
+    schema: ListingCreate
+    valid: false
+    note: total_price 必須 ≥ 1
+    data:
+      source_code: SRC-591
+      external_id: '1'
+      snapshot: { total_price: 0 }
+
+  # ---------------- PATCH 語意 ----------------
+  - id: C-PATCH-01
+    schema: ListingPatch
+    valid: true
+    note: null 代表清除可以為 null 的欄位
+    data: { url: null }
+  - id: C-PATCH-02
+    schema: ListingPatch
+    valid: false
+    note: lister_type 不可為 null
+    data: { lister_type: null }
+  - id: C-PATCH-03
+    schema: ListingPatch
+    valid: false
+    note: 空的 patch 不允許
+    data: {}
+  - id: C-PATCH-04
+    schema: ListingPatch
+    valid: false
+    note: 未定義欄位
+    data: { status: DELISTED }
+  - id: C-PATCH-05
+    schema: AlertRulePatch
+    valid: true
+    note: 清除價格門檻
+    data: { max_total_price: null }
+  - id: C-PATCH-06
+    schema: AlertRulePatch
+    valid: false
+    note: enabled 不可為 null
+    data: { enabled: null }
+
+  # ---------------- ReviewDecision ----------------
+  - id: C-RD-01
+    schema: ReviewDecision
+    valid: true
+    note: SET_UNIT，附直接門牌證據與刊登連結證據（對應 T-ADDR-09a；是否充分由伺服器判定）
+    data:
+      decision: SET_UNIT
+      address_unit_id: 302
+      rationale: 由刊登 591#123456 的仲介帶看，現場門牌 79 號 12 樓
+      new_evidence:
+        - { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 現場門牌照片（只存描述與雜湊）, observed_at: '2026-11-01T06:00:00Z', evidence_role: DIRECT_ADDRESS, derivation_type: ORIGINAL, capture: *photo_capture, asserting_party: *user_party, content_hash: 'sha256:9f1c' }
+        - { field: listing_identity, value: { listing_id: 11 }, description: 帶看仲介出示的刊登編號與看房單, observed_at: '2026-11-01T06:00:00Z', evidence_role: LISTING_LINKAGE, derivation_type: ORIGINAL, capture: *visit_capture, asserting_party: *user_party, link_method: AGENT_VIEWING_WITH_LISTING_REF, linked_listing: { listing_id: 11, listing_ref_seen: '591#123456' } }
+  - id: C-RD-02
+    schema: ReviewDecision
+    valid: false
+    note: SET_UNIT 缺少 address_unit_id
+    data: { decision: SET_UNIT, rationale: 看起來是這戶, evidence_ids: [5] }
+  - id: C-RD-03
+    schema: ReviewDecision
+    valid: false
+    note: SET_UNIT 的 address_unit_id 為 null
+    data: { decision: SET_UNIT, address_unit_id: null, rationale: 看起來是這戶, evidence_ids: [5] }
+  - id: C-RD-04
+    schema: ReviewDecision
+    valid: false
+    note: 確認類決定沒有附佐證（按下確認不等於真值）
+    data: { decision: CONFIRM_CANDIDATE, candidate_id: 9, rationale: 我覺得是這戶 }
+  - id: C-RD-05
+    schema: ReviewDecision
+    valid: false
+    note: evidence_ids 是空陣列，不算佐證
+    data: { decision: CONFIRM_CANDIDATE, candidate_id: 9, rationale: 我覺得是這戶, evidence_ids: [] }
+  - id: C-RD-06
+    schema: ReviewDecision
+    valid: true
+    note: 棄答只需要理由
+    data: { decision: ABSTAIN, rationale: 三戶坪型相同，照片無法區分 }
+  - id: C-RD-07
+    schema: ReviewDecision
+    valid: false
+    note: 棄答也必須有理由
+    data: { decision: ABSTAIN }
+  - id: C-RD-08
+    schema: ReviewDecision
+    valid: true
+    note: 確認同屋，引用既有證據
+    data: { decision: CONFIRM_SAME, rationale: 兩則刊登的室內照片完全相同, evidence_ids: [701, 702] }
+  - id: C-RD-09
+    schema: ReviewDecision
+    valid: false
+    note: 未定義的 decision
+    data: { decision: APPROVE, rationale: 未定義的決定類型 }
+  - id: C-RD-10
+    schema: ReviewDecision
+    valid: true
+    note: schema 合法，但只有地址文字、沒有刊登連結 → 伺服器判定 INSUFFICIENT（T-ADDR-09b）；schema 合法不等於佐證充分
+    data:
+      decision: SET_UNIT
+      address_unit_id: 302
+      rationale: 應該是 79 號 12 樓
+      new_evidence:
+        - { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 使用者輸入的地址文字, observed_at: '2026-11-01T06:00:00Z', evidence_role: OTHER, derivation_type: ORIGINAL, capture: { captured_by: user, captured_at: '2026-11-01T06:00:00Z', method: OTHER } }
+  - id: C-RD-11
+    schema: ReviewDecision
+    valid: true
+    note: 驗證推導規則（附佐證）
+    data: { decision: VERIFY_RULE, rationale: 樂居銷控表逐層列出 2–24 樓，每戶別的號碼一致, evidence_ids: [1201] }
+  - id: C-RD-12
+    schema: ReviewDecision
+    valid: false
+    note: VERIFY_RULE 沒有佐證
+    data: { decision: VERIFY_RULE, rationale: 看起來規則正確 }
+
+  # ---------------- UserEvidenceInput（佐證結構） ----------------
+  - id: C-UE-01
+    schema: UserEvidenceInput
+    valid: false
+    note: LISTING_LINKAGE 沒有 link_method 與 linked_listing
+    data: { field: listing_identity, value: { listing_id: 11 }, description: 我確定就是這間, observed_at: '2026-11-01T06:00:00Z', evidence_role: LISTING_LINKAGE, derivation_type: ORIGINAL, capture: *visit_capture }
+  - id: C-UE-02
+    schema: UserEvidenceInput
+    valid: false
+    note: ORIGINAL 沒有取得資訊（capture）
+    data: { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 現場門牌照片（只存描述）, observed_at: '2026-11-01T06:00:00Z', evidence_role: DIRECT_ADDRESS, derivation_type: ORIGINAL }
+  - id: C-UE-03
+    schema: UserEvidenceInput
+    valid: false
+    note: INTERIOR_FEATURE_MATCH 只列 1 個特徵
+    data: { field: listing_identity, value: { listing_id: 11 }, description: 室內特徵比對, observed_at: '2026-11-01T06:00:00Z', evidence_role: LISTING_LINKAGE, derivation_type: ORIGINAL, capture: *photo_capture, link_method: INTERIOR_FEATURE_MATCH, linked_listing: { listing_id: 11, listing_ref_seen: '591#123456' }, matched_features: [大理石牆] }
+  - id: C-UE-04
+    schema: UserEvidenceInput
+    valid: false
+    note: 覆核引用（REVIEW_CITATION）沒有 derived_from
+    data: { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 引用先前的門牌照片, observed_at: '2026-11-02T06:00:00Z', evidence_role: DIRECT_ADDRESS, derivation_type: REVIEW_CITATION }
+  - id: C-UE-05
+    schema: UserEvidenceInput
+    valid: false
+    note: derived_from 只有整數 ID，沒有型別
+    data: { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 引用先前的門牌照片, observed_at: '2026-11-02T06:00:00Z', evidence_role: DIRECT_ADDRESS, derivation_type: REVIEW_CITATION, derived_from: [901] }
+  - id: C-UE-06
+    schema: UserEvidenceInput
+    valid: true
+    note: 第二次覆核引用同一張照片（具型別參照）；根來源沿用照片的根來源，不增加獨立來源數（T-EVD-06）
+    data: { field: full_address, value: { address_text: 高鐵南路一段79號12樓 }, description: 引用先前的門牌照片, observed_at: '2026-11-02T06:00:00Z', evidence_role: DIRECT_ADDRESS, derivation_type: REVIEW_CITATION, derived_from: [{ ref_type: EVIDENCE, id: 901, role: CITES }] }
+
+  # ---------------- SupportAssessment / FieldResolution ----------------
+  - id: C-SA-01
+    schema: SupportAssessment
+    valid: true
+    note: 只有門牌照片，沒有刊登連結（T-ADDR-09c）
+    data: { result: INSUFFICIENT, unmet_conditions: [H2], confirmed_fields: [] }
+  - id: C-SA-02
+    schema: SupportAssessment
+    valid: false
+    note: SUFFICIENT 卻列出未達成條件
+    data: { result: SUFFICIENT, unmet_conditions: [H2], confirmed_fields: [full_address] }
+  - id: C-SA-03
+    schema: SupportAssessment
+    valid: false
+    note: INSUFFICIENT 卻確認了欄位
+    data: { result: INSUFFICIENT, unmet_conditions: [H1], confirmed_fields: [full_address] }
+  - id: C-FRS-01
+    schema: FieldResolution
+    valid: false
+    note: CONFIRMED 沒有 basis
+    data: { status: CONFIRMED, value: 高鐵南路一段79號12樓, basis: null, evidence_ids: [901] }
+  - id: C-FRS-02
+    schema: FieldResolution
+    valid: false
+    note: CONFIRMED 沒有佐證 ID
+    data: { status: CONFIRMED, value: 高鐵南路一段79號12樓, basis: HUMAN_REVIEW, evidence_ids: [] }
+  - id: C-FRS-03
+    schema: FieldResolution
+    valid: true
+    data: { status: NARROWED, value: A2, basis: null, evidence_ids: [] }
+
+  # ---------------- 同屋操作 ----------------
+  - id: C-SP-01
+    schema: SplitRequest
+    valid: true
+    data: { groups: [[11], [17]], rationale: 同樓不同戶，陽台方向不同, evidence_ids: [901] }
+  - id: C-SP-02
+    schema: SplitRequest
+    valid: false
+    note: 拆分至少要兩組
+    data: { groups: [[11, 17]], rationale: 測試拆分但只有一組 }
+  - id: C-MG-01
+    schema: MergeRequest
+    valid: true
+    data: { property_ids: [5, 8], rationale: 同一仲介跨平台刊登，室內照片相同, evidence_ids: [701] }
+  - id: C-MG-02
+    schema: MergeRequest
+    valid: false
+    note: 人工合併必須附佐證
+    data: { property_ids: [5, 8], rationale: 應該是同一間 }
+  - id: C-RA-01
+    schema: ReassessRequest
+    valid: true
+    data: { property_id: 5, subject_types: [ADDRESS_RESOLUTION, LISTING_MATCH], rationale: 拆分後重新評估 }
+  - id: C-RA-02
+    schema: ReassessRequest
+    valid: false
+    note: 範圍只能擇一
+    data: { property_id: 5, listing_ids: [11], subject_types: [ADDRESS_RESOLUTION], rationale: 同時指定物件與刊登範圍 }
+
+  # ---------------- 評估 ----------------
+  - id: C-AS-01
+    schema: Assessment
+    valid: true
+    note: 同樓不同戶：B1、B2、B3 的 12 樓都剩下 → MULTIPLE_CANDIDATES（對應 T-ADDR-03）
+    data:
+      id: 501
+      subject_type: ADDRESS_RESOLUTION
+      listing_id: 11
+      identity_match_id: null
+      snapshot_id: 340
+      ruleset_version: address-rules@0.3.0
+      registry_version_id: 3
+      evidence_set_hash: sha256:ab12
+      evidence_ids: [801, 802, 803]
+      registry_items_used: [{ ref_type: REGISTRY_MAPPING, id: 21, version: 1 }]
+      rule_score: null
+      calibrated_probability: null
+      calibration_version: null
+      basis: SYSTEM_RULES
+      flags: []
+      trigger: NEW_SNAPSHOT
+      status: CURRENT
+      superseded_by_id: null
+      created_at: '2026-11-01T01:00:00Z'
+      outcome: MULTIPLE_CANDIDATES
+      resolved_fields:
+        building: { status: UNKNOWN, value: null, basis: null, evidence_ids: [] }
+        sales_unit: { status: AMBIGUOUS, value: null, basis: null, evidence_ids: [] }
+        floor: { status: NARROWED, value: 12, basis: null, evidence_ids: [801] }
+        address_number: { status: AMBIGUOUS, value: null, basis: null, evidence_ids: [] }
+        full_address: { status: AMBIGUOUS, value: null, basis: null, evidence_ids: [] }
+      candidate_count: 3
+      candidates:
+        - candidate_id: 61
+          dwelling_id: 1012
+          address_unit_id: null
+          generated_by: G2
+          rule_score: 0.35
+          excluded: false
+          excluded_by_rule: null
+          rule_hits:
+            - { rule_code: S3, effect: 0.15, evidence_ids: [802] }
+            - { rule_code: S4, effect: 0.1, evidence_ids: [803] }
+            - { rule_code: S7, effect: 0.1, evidence_ids: [801] }
+        - { candidate_id: 62, dwelling_id: 1013, address_unit_id: null, generated_by: G2, rule_score: 0.35, excluded: false, excluded_by_rule: null, rule_hits: [] }
+        - { candidate_id: 63, dwelling_id: 1014, address_unit_id: null, generated_by: G2, rule_score: 0.35, excluded: false, excluded_by_rule: null, rule_hits: [] }
+        - { candidate_id: 64, dwelling_id: 1004, address_unit_id: null, generated_by: G2, rule_score: 0, excluded: true, excluded_by_rule: X6, rule_hits: [{ rule_code: X6, effect: null, decisive: true, evidence_ids: [802] }] }
+  - id: C-AS-02
+    schema: Assessment
+    valid: false
+    note: 未校準前不得提供機率
+    data:
+      id: 502
+      subject_type: COMMUNITY_MEMBERSHIP
+      listing_id: 11
+      identity_match_id: null
+      snapshot_id: 340
+      ruleset_version: membership-rules@0.3.0
+      registry_version_id: 3
+      evidence_set_hash: sha256:cd34
+      evidence_ids: [804]
+      registry_items_used: []
+      rule_score: 0.9
+      calibrated_probability: 0.9
+      calibration_version: null
+      basis: SYSTEM_RULES
+      flags: []
+      trigger: NEW_SNAPSHOT
+      status: CURRENT
+      superseded_by_id: null
+      created_at: '2026-11-01T01:00:00Z'
+      outcome: MEMBER
+      rule_hits: [{ rule_code: M2, effect: 0.5, evidence_ids: [804] }]
+  - id: C-AS-03
+    schema: Assessment
+    valid: true
+    note: 人工依直接證據確認完整門牌；mapping 未驗證，所以 sales_unit 維持 NARROWED（T-ADDR-09a）
+    data:
+      id: 510
+      subject_type: ADDRESS_RESOLUTION
+      listing_id: 11
+      identity_match_id: null
+      snapshot_id: 340
+      ruleset_version: address-rules@0.3.0
+      registry_version_id: 3
+      evidence_set_hash: sha256:ef56
+      evidence_ids: [801, 805, 910, 911]
+      registry_items_used: [{ ref_type: REGISTRY_MAPPING, id: 22, version: 1 }]
+      rule_score: null
+      calibrated_probability: null
+      calibration_version: null
+      basis: HUMAN_REVIEW
+      flags: []
+      trigger: REVIEW
+      status: CURRENT
+      superseded_by_id: null
+      created_at: '2026-11-01T07:00:00Z'
+      outcome: CONFIRMED
+      resolved_fields:
+        building: { status: UNKNOWN, value: null, basis: null, evidence_ids: [] }
+        sales_unit: { status: NARROWED, value: A2, basis: null, evidence_ids: [805] }
+        floor: { status: CONFIRMED, value: 12, basis: HUMAN_REVIEW, evidence_ids: [910] }
+        address_number: { status: CONFIRMED, value: 高鐵南路一段79號, basis: HUMAN_REVIEW, evidence_ids: [910] }
+        full_address: { status: CONFIRMED, value: 高鐵南路一段79號12樓, basis: HUMAN_REVIEW, evidence_ids: [910, 911] }
+      candidate_count: 1
+      candidates:
+        - { candidate_id: 70, dwelling_id: 1002, address_unit_id: 302, generated_by: G2, rule_score: 0.6, excluded: false, excluded_by_rule: null, rule_hits: [{ rule_code: S2, effect: 0.4, evidence_ids: [805] }, { rule_code: S7, effect: 0.1, evidence_ids: [801] }] }
+
+  # ---------------- 證據與來源獨立性 ----------------
+  - id: C-EV-01
+    schema: Evidence
+    valid: false
+    note: INFERENCE 必須有具型別的 derived_from
+    data: &inference_base
+      id: 900
+      kind: INFERENCE
+      origin: RULE
+      listing_id: 17
+      snapshot_id: null
+      source_document_id: null
+      review_id: null
+      field: sales_unit
+      value: B2
+      locator: { type: FREE_TEXT, value: 'S8 inherited via identity_match 33' }
+      excerpt: null
+      excerpt_hash: null
+      observed_at: '2026-11-01T01:00:00Z'
+      evidence_role: OTHER
+      derivation_type: INFERENCE
+      derived_from: []
+      origin_ids: [3, 1]
+      capture: null
+      link_method: null
+      content_hash: null
+      extractor_version: null
+      status: ACTIVE
+      status_reason: null
+      superseded_by_id: null
+      raw_available: false
+      links: []
+      version: 1
+  - id: C-EV-02
+    schema: Evidence
+    valid: true
+    note: 同一文件的 OCR 文字：derived_from 指向圖片證據；根來源與圖片相同（T-EVD-08）
+    data:
+      id: 921
+      kind: SOURCE_FACT
+      origin: SOURCE_DOCUMENT
+      listing_id: 11
+      snapshot_id: null
+      source_document_id: 55
+      review_id: null
+      field: full_address
+      value: { address_text: 高鐵南路一段79號12樓 }
+      locator: { type: IMAGE_REGION, value: 'doc55#x=10,y=20,w=80,h=12' }
+      excerpt: 高鐵南路一段79號12樓
+      excerpt_hash: 'sha256:aa01'
+      observed_at: '2026-11-03T01:00:00Z'
+      evidence_role: DIRECT_ADDRESS
+      derivation_type: OCR
+      derived_from: [{ ref_type: EVIDENCE, id: 920, role: EXTRACTED_FROM }]
+      origin_ids: [7]
+      capture: null
+      link_method: null
+      content_hash: null
+      extractor_version: ocr@0.1
+      status: ACTIVE
+      status_reason: null
+      superseded_by_id: null
+      raw_available: true
+      links: []
+      version: 1
+  - id: C-EV-03
+    schema: Evidence
+    valid: false
+    note: INFERENCE 類型卻標成 ORIGINAL（推論不能偽裝成原始觀測）
+    data:
+      <<: *inference_base
+      id: 901
+      derivation_type: ORIGINAL
+      derived_from: [{ ref_type: IDENTITY_MATCH, id: 33, role: VIA_MATCH }]
+  - id: C-EV-04
+    schema: Evidence
+    valid: true
+    note: S8 繼承推論，具型別參照指向原證據與配對；根來源含 SYSTEM（id 1）
+    data:
+      <<: *inference_base
+      id: 902
+      derived_from: [{ ref_type: EVIDENCE, id: 805, role: INFERRED_FROM }, { ref_type: IDENTITY_MATCH, id: 33, role: VIA_MATCH }]
+  - id: C-OR-01
+    schema: OriginRelationCreate
+    valid: false
+    note: 判定 INDEPENDENT 沒有附佐證
+    data: { origin_a_id: 3, origin_b_id: 9, relation: INDEPENDENT, rationale: 看起來是不同仲介 }
+  - id: C-OR-02
+    schema: OriginRelationCreate
+    valid: true
+    note: 兩份確實獨立的佐證：現場照片與銷控表（T-EVD-10）
+    data: { origin_a_id: 3, origin_b_id: 9, relation: INDEPENDENT, rationale: 使用者現場拍攝與樂居銷控表，沒有互相引用, evidence_ids: [910, 1201] }
+  - id: C-OR-03
+    schema: OriginRelationCreate
+    valid: false
+    note: UNKNOWN 是預設值，不能建立
+    data: { origin_a_id: 3, origin_b_id: 9, relation: UNKNOWN, rationale: 不確定是否同源 }
+  - id: C-IR-01
+    schema: IndependenceRequest
+    valid: false
+    note: 至少兩筆證據
+    data: { evidence_ids: [910] }
+  - id: C-IR-02
+    schema: IndependenceResult
+    valid: true
+    note: 同一刊登改標題跨平台發布（I2）→ DEPENDENT；只有 1 個獨立根來源群（T-EVD-07）
+    data: { pairs: [{ evidence_a_id: 1301, evidence_b_id: 1401, relation: DEPENDENT, decided_by: RULE_I2 }], independent_origin_count: 1 }
+
+  # ---------------- 推導規則 ----------------
+  - id: C-DR-01
+    schema: DerivationRuleCreate
+    valid: true
+    note: 測試 fixture 的規則：全社區 1–24 樓，同一戶別共用號，1 樓為店面
+    data:
+      scope_type: COMMUNITY
+      scope_ids: []
+      floor_min: 1
+      floor_max: 24
+      rule_type: SAME_NUMBER_ALL_FLOORS
+      floor_label_format: '{floor}樓'
+      exceptions: [{ floor_min: 1, floor_max: 1, sales_unit_ids: [], exception_type: SHOP, override_number: null, note: 1 樓為店面（虛構） }]
+      rationale: 依樂居銷控表（待核對）提出
+      evidence_ids: [1201]
+  - id: C-DR-02
+    schema: DerivationRuleCreate
+    valid: false
+    note: 沒有樓層範圍
+    data: { scope_type: COMMUNITY, scope_ids: [], floor_max: 24, rule_type: SAME_NUMBER_ALL_FLOORS, floor_label_format: '{floor}樓', exceptions: [], rationale: 依總樓高推定, evidence_ids: [1] }
+  - id: C-DR-03
+    schema: DerivationRuleCreate
+    valid: false
+    note: COMMUNITY 範圍不應指定 scope_ids
+    data: { scope_type: COMMUNITY, scope_ids: [5], floor_min: 2, floor_max: 24, rule_type: SAME_NUMBER_ALL_FLOORS, floor_label_format: '{floor}樓', exceptions: [], rationale: 社區範圍卻指定戶別, evidence_ids: [1] }
+  - id: C-DR-04
+    schema: DerivationRuleCreate
+    valid: false
+    note: DIFFERENT_NUMBER 例外沒有 override_number
+    data: { scope_type: SALES_UNIT, scope_ids: [17], floor_min: 2, floor_max: 12, rule_type: SAME_NUMBER_ALL_FLOORS, floor_label_format: '{floor}樓', exceptions: [{ floor_min: 12, floor_max: 12, sales_unit_ids: [17], exception_type: DIFFERENT_NUMBER }], rationale: 例外缺號碼, evidence_ids: [1] }
+  - id: C-DR-05
+    schema: DerivationRuleCreate
+    valid: false
+    note: 提出規則必須附佐證
+    data: { scope_type: COMMUNITY, scope_ids: [], floor_min: 2, floor_max: 24, rule_type: SAME_NUMBER_ALL_FLOORS, floor_label_format: '{floor}樓', exceptions: [], rationale: 我猜每層都一樣, evidence_ids: [] }
+
+  # ---------------- 輪次與錯誤 ----------------
+  - id: C-FR-01
+    schema: FetchRun
+    valid: true
+    note: 撞到頁數上限 → INCOMPLETE，不累加未出現次數
+    data:
+      id: 90
+      source_id: 2
+      run_type: SCHEDULED
+      status: SUCCEEDED
+      coverage: INCOMPLETE
+      coverage_reasons: [PAGE_CAP_HIT, PAGINATION_NOT_EXHAUSTED]
+      import_mode: null
+      query_fingerprint: fp-01
+      pages_fetched: 5
+      page_cap_hit: true
+      pagination_exhausted: false
+      reported_total: 63
+      enumerated_count: 50
+      list_parse_failures: 0
+      detail_failures: 0
+      started_at: '2026-11-06T01:00:00Z'
+      finished_at: '2026-11-06T01:09:00Z'
+      error_summary: null
+  - id: C-FR-02
+    schema: FetchRun
+    valid: false
+    note: 舊版的 status OK 已改名為 SUCCEEDED
+    data:
+      id: 91
+      source_id: 2
+      run_type: SCHEDULED
+      status: OK
+      coverage: COMPLETE
+      coverage_reasons: []
+      import_mode: null
+      query_fingerprint: fp-01
+      pages_fetched: 7
+      page_cap_hit: false
+      pagination_exhausted: true
+      reported_total: null
+      enumerated_count: 63
+      list_parse_failures: 0
+      detail_failures: 0
+      started_at: '2026-11-06T13:00:00Z'
+      finished_at: '2026-11-06T13:10:00Z'
+      error_summary: null
+  - id: C-PB-01
+    schema: Problem
+    valid: true
+    note: 相同 Idempotency-Key、不同內容
+    data: { type: 'https://jev.local/problems/idempotency-key-reused', title: Idempotency key reused, status: 422, code: IDEMPOTENCY_KEY_REUSED, detail: '同一個 key 在 24 小時內已用於不同的請求內容' }
+
+  # ---------------- 事件 ----------------
+  - id: C-EVT-01
+    schema: Event
+    valid: true
+    note: 初始化觀測：保存但不通知（BASELINE_CONTEXT）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V1X
+      event_type: LISTING_FIRST_OBSERVED
+      schema_version: 1
+      idempotency_key: 'first_observed:11'
+      occurred_at: '2026-10-20T01:00:00Z'
+      recorded_at: '2026-10-20T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: 80, snapshot_id: 300, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: false
+      suppression_reason: BASELINE_CONTEXT
+      payload: { context: BASELINE, new_listing_status: NOT_NEW, cycle_no: 1, snapshot_id: 300, total_price: 15800000 }
+  - id: C-EVT-02
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V1Y
+      event_type: LISTING_NEW_CONFIRMED
+      schema_version: 1
+      idempotency_key: 'new_confirmed:20'
+      occurred_at: '2026-11-03T01:10:00Z'
+      recorded_at: '2026-11-03T01:10:01Z'
+      subject: { listing_id: 20, property_id: 12, source_id: 2 }
+      caused_by: { fetch_run_id: 85, snapshot_id: 360, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 1, snapshot_id: 360, confirmation_basis: COMPLETE_RUN_DIFF, late_confirmation: false, total_price: 16200000 }
+  - id: C-EVT-03
+    schema: Event
+    valid: true
+    note: 真正新增的刊登（L20，CONFIRMED_NEW）延遲合併進含初始化刊登（L11）的群組；冪等鍵只含 listing_id（T-LIFE-14）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V1Z
+      event_type: DWELLING_NEW_LISTING
+      schema_version: 1
+      idempotency_key: 'dwelling_new_listing:20'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: 20, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: null, snapshot_id: null, operation_id: 41, review_id: 44, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { anchor_listing_id: 11, other_listing_ids: [11], joining_listing_context: INCREMENTAL, new_listing_status: CONFIRMED_NEW, trigger: MERGE, trigger_operation_id: 41, property_was_inactive: false, total_price: 16200000 }
+  - id: C-EVT-04
+    schema: Event
+    valid: true
+    note: 第二次重新上架（週期 3）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V20
+      event_type: LISTING_RELISTED
+      schema_version: 1
+      idempotency_key: 'relisted:11:3'
+      occurred_at: '2026-12-01T01:00:00Z'
+      recorded_at: '2026-12-01T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: 120, snapshot_id: null, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { previous_cycle_no: 2, cycle_no: 3, delisted_at: '2026-11-20T13:00:00Z', snapshot_id: null, previous_last_price: 15500000, total_price: null }
+  - id: C-EVT-05
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V21
+      event_type: LISTING_PRICE_CHANGED
+      schema_version: 1
+      idempotency_key: 'price:11:341'
+      occurred_at: '2026-11-02T01:00:00Z'
+      recorded_at: '2026-11-02T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: 84, snapshot_id: 341, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 2, from_snapshot_id: 340, to_snapshot_id: 341, old_price: 15800000, new_price: 15500000, diff: -300000, pct: -0.019, direction: DOWN }
+  - id: C-EVT-06
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V22
+      event_type: LISTING_FIELDS_CHANGED
+      schema_version: 1
+      idempotency_key: 'fields:11:342'
+      occurred_at: '2026-11-03T01:00:00Z'
+      recorded_at: '2026-11-03T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: 85, snapshot_id: 342, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 2, from_snapshot_id: 341, to_snapshot_id: 342, changed_fields: [{ field: floor_text, old: 中樓層, new: 12F/24F }] }
+  - id: C-EVT-07
+    schema: Event
+    valid: true
+    note: 下架不需要新快照
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V1W
+      event_type: LISTING_DELISTED
+      schema_version: 1
+      idempotency_key: 'delisted:11:2'
+      occurred_at: '2026-11-05T13:10:00Z'
+      recorded_at: '2026-11-05T13:10:02Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: 88, snapshot_id: null, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 2, reason: MISSING_IN_COMPLETE_RUNS, last_snapshot_id: 340, last_seen_at: '2026-11-04T01:05:00Z', missing_complete_run_ids: [87, 88], evidence_document_id: null, days_listed: 21 }
+  - id: C-EVT-08
+    schema: Event
+    valid: true
+    note: 系統發現新的同屋關係：保存、不通知
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V23
+      event_type: PROPERTY_MERGED
+      schema_version: 1
+      idempotency_key: 'property_merged:41'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: null, property_id: 5, source_id: null }
+      caused_by: { fetch_run_id: null, snapshot_id: null, operation_id: 41, review_id: 44, assessment_id: null }
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { operation_id: 41, op_type: MANUAL_MERGE, into_property_id: 5, merged_property_ids: [12], listing_ids: [11, 20], initial_context_listing_ids: [11], new_listing_ids: [20], identity_match_id: 33 }
+  - id: C-EVT-09
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V24
+      event_type: PROPERTY_SPLIT
+      schema_version: 1
+      idempotency_key: 'property_split:42'
+      occurred_at: '2026-11-07T02:00:00Z'
+      recorded_at: '2026-11-07T02:00:00Z'
+      subject: { listing_id: null, property_id: 5, source_id: null }
+      caused_by: { fetch_run_id: null, snapshot_id: null, operation_id: 42, review_id: null, assessment_id: null }
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { operation_id: 42, groups: [{ property_id: 5, listing_ids: [11] }, { property_id: 13, listing_ids: [20] }] }
+  - id: C-EVT-10
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V25
+      event_type: MERGE_REVERTED
+      schema_version: 1
+      idempotency_key: 'merge_reverted:43'
+      occurred_at: '2026-11-07T03:00:00Z'
+      recorded_at: '2026-11-07T03:00:00Z'
+      subject: { listing_id: null, property_id: 5, source_id: null }
+      caused_by: { fetch_run_id: null, snapshot_id: null, operation_id: 43, review_id: null, assessment_id: null }
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { operation_id: 43, reverted_operation_id: 41, restored: [{ listing_id: 20, property_id: 12 }] }
+  - id: C-EVT-11
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V26
+      event_type: COMMUNITY_MEMBERSHIP_CHANGED
+      schema_version: 1
+      idempotency_key: 'community_membership_changed:502'
+      occurred_at: '2026-11-01T01:00:00Z'
+      recorded_at: '2026-11-01T01:00:00Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: { fetch_run_id: null, snapshot_id: 340, operation_id: null, review_id: null, assessment_id: 502 }
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { assessment_id: 502, previous_assessment_id: null, old_status: null, new_status: MEMBER, rule_score: 0.9, basis: SYSTEM_RULES }
+  - id: C-EVT-12
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V27
+      event_type: ADDRESS_ASSESSMENT_CHANGED
+      schema_version: 1
+      idempotency_key: 'address_assessment_changed:503'
+      occurred_at: '2026-11-07T02:00:01Z'
+      recorded_at: '2026-11-07T02:00:01Z'
+      subject: { listing_id: 20, property_id: 13, source_id: 2 }
+      caused_by: { fetch_run_id: null, snapshot_id: null, operation_id: 42, review_id: null, assessment_id: 503 }
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { assessment_id: 503, previous_assessment_id: 499, old_status: SINGLE_CANDIDATE, new_status: MULTIPLE_CANDIDATES, full_address_status: AMBIGUOUS, candidate_count: 3, top_candidate_id: null, basis: SYSTEM_RULES, trigger: SPLIT }
+  - id: C-EVT-13
+    schema: Event
+    valid: true
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V28
+      event_type: SOURCE_HEALTH_CHANGED
+      schema_version: 1
+      idempotency_key: 'source_health:2:95'
+      occurred_at: '2026-11-07T01:00:00Z'
+      recorded_at: '2026-11-07T01:00:00Z'
+      subject: { listing_id: null, property_id: null, source_id: 2 }
+      caused_by: { fetch_run_id: 95, snapshot_id: null, operation_id: null, review_id: null, assessment_id: null }
+      notify_eligible: true
+      suppression_reason: null
+      payload: { old_health: ok, new_health: degraded, consecutive_failures: 3, fetch_run_id: 95, auto_fetch_disabled: true }
+  - id: C-EVT-14
+    schema: Event
+    valid: false
+    note: 依缺席判定下架，但只有 1 個完整輪次
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V29
+      event_type: LISTING_DELISTED
+      schema_version: 1
+      idempotency_key: 'delisted:11:2'
+      occurred_at: '2026-11-05T13:10:00Z'
+      recorded_at: '2026-11-05T13:10:02Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 2, reason: MISSING_IN_COMPLETE_RUNS, last_snapshot_id: 340, last_seen_at: '2026-11-04T01:05:00Z', missing_complete_run_ids: [88] }
+  - id: C-EVT-15
+    schema: Event
+    valid: false
+    note: 價格事件缺少 direction
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2A
+      event_type: LISTING_PRICE_CHANGED
+      schema_version: 1
+      idempotency_key: 'price:11:341'
+      occurred_at: '2026-11-02T01:00:00Z'
+      recorded_at: '2026-11-02T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { cycle_no: 2, from_snapshot_id: 340, to_snapshot_id: 341, old_price: 15800000, new_price: 15500000, diff: -300000, pct: -0.019 }
+  - id: C-EVT-16
+    schema: Event
+    valid: false
+    note: 冪等鍵格式錯誤（缺少 cycle_no）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2B
+      event_type: LISTING_RELISTED
+      schema_version: 1
+      idempotency_key: 'relisted:11'
+      occurred_at: '2026-12-01T01:00:00Z'
+      recorded_at: '2026-12-01T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { previous_cycle_no: 2, cycle_no: 3, delisted_at: '2026-11-20T13:00:00Z', snapshot_id: null }
+  - id: C-EVT-17
+    schema: Event
+    valid: false
+    note: 重新上架的 cycle_no 必須 ≥ 2
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2C
+      event_type: LISTING_RELISTED
+      schema_version: 1
+      idempotency_key: 'relisted:11:1'
+      occurred_at: '2026-12-01T01:00:00Z'
+      recorded_at: '2026-12-01T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { previous_cycle_no: 1, cycle_no: 1, delisted_at: '2026-11-20T13:00:00Z', snapshot_id: null }
+  - id: C-EVT-18
+    schema: Event
+    valid: false
+    note: 未定義的 schema_version
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2D
+      event_type: LISTING_FIRST_OBSERVED
+      schema_version: 2
+      idempotency_key: 'first_observed:11'
+      occurred_at: '2026-10-20T01:00:00Z'
+      recorded_at: '2026-10-20T01:00:01Z'
+      subject: { listing_id: 11, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: false
+      suppression_reason: BASELINE_CONTEXT
+      payload: { context: BASELINE, new_listing_status: NOT_NEW, cycle_no: 1, snapshot_id: 300 }
+  - id: C-EVT-19
+    schema: Event
+    valid: false
+    note: 同屋新刊登事件缺少 property_id
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2E
+      event_type: DWELLING_NEW_LISTING
+      schema_version: 1
+      idempotency_key: 'dwelling_new_listing:20'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: 20, property_id: null, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { anchor_listing_id: 11, other_listing_ids: [11], joining_listing_context: INCREMENTAL, new_listing_status: CONFIRMED_NEW, trigger: MERGE, trigger_operation_id: 41, property_was_inactive: false }
+  - id: C-EVT-20
+    schema: Event
+    valid: true
+    note: 推導規則被撤回 → 新名冊版本（T-RULE-04）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2F
+      event_type: REGISTRY_UPDATED
+      schema_version: 1
+      idempotency_key: 'registry_updated:5'
+      occurred_at: '2026-11-08T01:00:00Z'
+      recorded_at: '2026-11-08T01:00:00Z'
+      subject: { listing_id: null, property_id: null, source_id: null }
+      caused_by: *nocause
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { registry_version_id: 5, previous_registry_version_id: 4, changes: [{ item_type: DERIVATION_RULE, item_id: 2, old_status: VERIFIED, new_status: RETRACTED }], affected_listing_ids: [11] }
+  - id: C-EVT-21
+    schema: Event
+    valid: false
+    note: 初始化刊登（BASELINE）不可能產生同屋新案事件（T-LIFE-13）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2G
+      event_type: DWELLING_NEW_LISTING
+      schema_version: 1
+      idempotency_key: 'dwelling_new_listing:12'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: 12, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { anchor_listing_id: 11, other_listing_ids: [11], joining_listing_context: BASELINE, new_listing_status: NOT_NEW, trigger: MERGE, trigger_operation_id: 41, property_was_inactive: false }
+  - id: C-EVT-22
+    schema: Event
+    valid: false
+    note: BASELINE 首次觀測的抑制原因必須是 BASELINE_CONTEXT
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2H
+      event_type: LISTING_FIRST_OBSERVED
+      schema_version: 1
+      idempotency_key: 'first_observed:12'
+      occurred_at: '2026-10-20T01:00:00Z'
+      recorded_at: '2026-10-20T01:00:01Z'
+      subject: { listing_id: 12, property_id: 6, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: false
+      suppression_reason: INTERNAL_EVENT
+      payload: { context: BASELINE, new_listing_status: NOT_NEW, cycle_no: 1, snapshot_id: 301 }
+  - id: C-EVT-23
+    schema: Event
+    valid: false
+    note: 合併事件不得標成可通知
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2J
+      event_type: PROPERTY_MERGED
+      schema_version: 1
+      idempotency_key: 'property_merged:44'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: null, property_id: 5, source_id: null }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { operation_id: 44, op_type: AUTO_MERGE, into_property_id: 5, merged_property_ids: [6], listing_ids: [11, 12], initial_context_listing_ids: [11, 12], new_listing_ids: [], identity_match_id: 34 }
+  - id: C-EVT-24
+    schema: Event
+    valid: false
+    note: 可通知的事件不得同時帶抑制原因
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2K
+      event_type: LISTING_NEW_CONFIRMED
+      schema_version: 1
+      idempotency_key: 'new_confirmed:21'
+      occurred_at: '2026-11-03T01:10:00Z'
+      recorded_at: '2026-11-03T01:10:01Z'
+      subject: { listing_id: 21, property_id: 14, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: BASELINE_CONTEXT
+      payload: { cycle_no: 1, snapshot_id: 361, confirmation_basis: COMPLETE_RUN_DIFF, late_confirmation: false }
+  - id: C-EVT-25
+    schema: Event
+    valid: true
+    note: 人工初始化匯入的首次觀測（MANUAL_INITIAL_CONTEXT，不通知；T-LIFE-15）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2M
+      event_type: LISTING_FIRST_OBSERVED
+      schema_version: 1
+      idempotency_key: 'first_observed:30'
+      occurred_at: '2026-10-21T01:00:00Z'
+      recorded_at: '2026-10-21T01:00:01Z'
+      subject: { listing_id: 30, property_id: 20, source_id: 1 }
+      caused_by: *nocause
+      notify_eligible: false
+      suppression_reason: MANUAL_INITIAL_CONTEXT
+      payload: { context: MANUAL_INITIAL, new_listing_status: NOT_NEW, cycle_no: 1, snapshot_id: 400 }
+  - id: C-EVT-26
+    schema: Event
+    valid: false
+    note: v0.3 的 listing + anchor 兩段式冪等鍵已廢止（群組 anchor 可變，不能用來去重）
+    data:
+      event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V2N
+      event_type: DWELLING_NEW_LISTING
+      schema_version: 1
+      idempotency_key: 'dwelling_new_listing:20:11'
+      occurred_at: '2026-11-06T02:00:00Z'
+      recorded_at: '2026-11-06T02:00:00Z'
+      subject: { listing_id: 20, property_id: 5, source_id: 2 }
+      caused_by: *nocause
+      notify_eligible: true
+      suppression_reason: null
+      payload: { anchor_listing_id: 11, other_listing_ids: [11], joining_listing_context: INCREMENTAL, new_listing_status: CONFIRMED_NEW, trigger: MERGE, trigger_operation_id: 41, property_was_inactive: false }
+
+  # ---------------- 通知 ----------------
+  - id: C-NT-01
+    schema: Notification
+    valid: true
+    note: 拆分後的更正通知：觸發事件是 PROPERTY_SPLIT（notify_eligible = false），引用原本的新案通知（T-LIFE-20、T-NTF-02）
+    data: { id: 302, notification_kind: CORRECTION, alert_rule_id: 1, event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V24, channel: TELEGRAM, rendered: { text: '更正：L20 與 L11 已拆分，先前的同屋新刊登通知不再成立' }, status: SENT, attempts: 1, last_error: null, sent_at: '2026-11-07T02:01:00Z', corrects_notification_id: 301 }
+  - id: C-NT-02
+    schema: Notification
+    valid: false
+    note: 更正通知必須指向原通知
+    data: { id: 303, notification_kind: CORRECTION, alert_rule_id: 1, event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V24, channel: TELEGRAM, rendered: { text: '更正' }, status: PENDING, attempts: 0, last_error: null, sent_at: null, corrects_notification_id: null }
+  - id: C-NT-03
+    schema: Notification
+    valid: false
+    note: 一般事件通知不得帶 corrects_notification_id
+    data: { id: 304, notification_kind: EVENT, alert_rule_id: 1, event_id: 01JB2Z8Q4K7M3N5P6R8S9T0V1Z, channel: TELEGRAM, rendered: { text: '同屋新刊登' }, status: SENT, attempts: 1, last_error: null, sent_at: '2026-11-06T02:01:00Z', corrects_notification_id: 301 }
