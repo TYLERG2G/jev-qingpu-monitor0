@@ -1466,7 +1466,7 @@ components:
 
     UnitType:
       type: object
-      required: [id, code, area_ping_min, area_ping_max, parking_basis, rooms, halls, baths, record_status]
+      required: [id, code, area_ping_min, area_ping_max, parking_basis, rooms, halls, baths, layout_fingerprint, record_status]
       properties:
         id: { type: integer }
         code: { type: string }
@@ -1476,7 +1476,30 @@ components:
         rooms: { type: [integer, 'null'] }
         halls: { type: [integer, 'null'] }
         baths: { type: [integer, 'null'] }
+        layout_fingerprint: { $ref: '#/components/schemas/LayoutFingerprint' }
         record_status: { $ref: '#/components/schemas/RecordStatus' }
+
+    LayoutFingerprint:
+      description: 坪型指紋（docs/16 §2）；可以為 null（尚未整理）
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        area_ping_ex_parking: { type: [number, 'null'] }
+        main_ping: { type: [number, 'null'] }
+        balcony_ping: { type: [number, 'null'] }
+        mirror: { type: [string, 'null'], enum: [L, R, null] }
+        block_position: { type: [string, 'null'], enum: [TL, TR, ML, MR, BL, BR, null], description: 'T = 靠高鐵南路的前排' }
+        mirror_pair: { type: array, items: { type: string }, description: '互為鏡像的戶別代碼' }
+        kitchen_type: { type: [string, 'null'] }
+        kitchen_position: { type: [string, 'null'] }
+        bathroom_window: { type: [boolean, 'null'] }
+        balcony_count: { type: [integer, 'null'] }
+        balcony_position: { type: [string, 'null'] }
+        living_window_orientation: { type: [string, 'null'] }
+        corner_unit: { type: [boolean, 'null'] }
+        distinctive_features: { type: array, items: { type: string } }
+        view_hints: { type: array, items: { type: string } }
+        source_evidence_ids: { type: array, items: { type: integer }, description: '例如樂居格局圖的人工轉錄證據' }
 
     SalesUnit:
       type: object
@@ -2303,7 +2326,7 @@ components:
         calibrated_probability: { type: 'null', description: '未校準前固定為 null；校準後的版本才會放寬' }
         calibration_version: { type: 'null' }
         basis: { type: string, enum: [SYSTEM_RULES, HUMAN_REVIEW] }
-        flags: { type: array, items: { type: string, enum: [REGISTRY_GAP, MAPPING_DISPUTE, INTERNAL_INCONSISTENCY, STALE_EVIDENCE] } }
+        flags: { type: array, items: { type: string, enum: [REGISTRY_GAP, MAPPING_DISPUTE, INTERNAL_INCONSISTENCY, STALE_EVIDENCE, PHOTO_REUSE, AREA_BASIS_INFERRED, AREA_BASIS_AMBIGUOUS] } }
         trigger: { type: string, enum: [NEW_SNAPSHOT, EVIDENCE_CHANGED, REGISTRY_UPDATED, REVIEW, REVIEW_RETRACTED, MERGE, SPLIT, REVERT, RULESET_UPDATED, MANUAL] }
         status: { type: string, enum: [CURRENT, SUPERSEDED] }
         superseded_by_id: { type: [integer, 'null'] }

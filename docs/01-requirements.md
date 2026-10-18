@@ -7,6 +7,7 @@
 - G1 房源監控：追蹤試點社區的刊登，並辨識首次觀測、確認新刊登、同一住宅的新刊登、重新上架、價格與欄位變化、下架。
 - G2 跨刊登同屋辨識：把指向同一間實體住宅的刊登歸成一組；證據不足時不自動合併；可以拆分與撤回。
 - G3 完整門牌推斷：推斷完整門牌，並附證據與可信度；支援多候選、部分確認、資訊不足、證據衝突、人工確認與棄答。
+  - v0.5 方法調整【已確認】（D-016）：以**刊登坪數**篩選、以 **591 刊登照片**比對格局來辨識戶別；以**樂居格局圖**連結 591 門牌示意圖得到「戶別 → 號」。照片比對分兩階段：人工比對（MVP）與自動影像辨識（規劃）。見 [16](16-layout-photo-matching.md)。
 
 ## 3. 範圍
 | 項目 | 標記 | 內容 |
@@ -48,6 +49,7 @@
 | FR-20 | 門牌推導規則：與涵蓋度分開記錄；有範圍、樓層區間、例外、狀態、版本、證據；可以覆核、撤回，並觸發重新評估（v0.3，【建議預設】設計） | Must | 第二輪審閱 |
 | FR-21 | 人工確認完整門牌的充分性判定（H1–H6）、逐欄位確認狀態、撤回後依剩餘佐證重新評估（v0.3，【建議預設】設計） | Must | 第二輪審閱 |
 | FR-22 | 來源相依與獨立性：根來源、具型別衍生參照、關係判定（UNKNOWN 不算獨立）、連鎖撤回（v0.3，【建議預設】設計） | Must | 第二輪審閱 |
+| FR-24 | 坪型指紋（樂居格局圖、成交坪數）與刊登照片格局比對，辨識戶別；照片不能硬排除、不能確認門牌；照片重複使用要偵測（v0.5，方法【已確認】、規則【建議預設】） | Must | D-016 |
 | FR-23 | 事件保存與通知分開；初始化資料不當成新案；同屋關係與真正新增刊登分開（v0.3，【建議預設】設計） | Must | D-010、第二輪審閱 |
 
 ## 5. 非功能需求（【建議預設】；數值是【建議目標】）
@@ -85,6 +87,7 @@
 | AC-17 | 只有已驗證、而且適用於該戶別與樓層的推導規則，才能支持系統確認；沒有規則時不依總樓高推定樓層 | T-RULE-01～06 |
 | AC-18 | 人工確認需要直接門牌證據＋刊登連結證據；只填地址、只有照片、只按確認都不充分；撤回後依剩餘佐證重新評估 | T-ADDR-09a～09g、T-ADDR-11a～11c |
 | AC-19 | 複製、轉載、OCR、再次覆核不增加獨立來源數；UNKNOWN 不算獨立；撤回會連鎖追蹤 | T-EVD-06～12 |
+| AC-21 | 坪數唯一的戶別（例如 30.0 坪）直接縮小到 1 個戶別候選；坪數相同的戶別（例如 36.1 坪的 D2、D5）要靠照片的鏡像特徵區分；照片只能把戶別縮小，不能決定樓層或確認完整門牌 | T-PHOTO-01～07 |
 | AC-20 | 初始化資料（BASELINE、MANUAL_INITIAL）即使延遲合併也不發新案通知；拆分、撤回後再合併不重發新案，只發更正通知；新案去重不依賴可變的群組 anchor；真正新增刊登正常通知 | T-LIFE-13～20 |
 
 ## 7. 追溯矩陣（需求 → 資料模型 → API／事件 → 驗收與測試）
@@ -112,4 +115,5 @@
 | FR-20 | address_derivation_rule、registry_version、evidence_link（DERIVATION_RULE）、assessment.registry_items_used | `GET /registry/derivation-rules`、`POST /registry/derivation-rules`、`POST /registry/derivation-rules/{rule_id}:retract`、覆核 `DERIVATION_RULE` | REGISTRY_UPDATED、ADDRESS_ASSESSMENT_CHANGED | AC-17；T-RULE-*；C-DR-* |
 | FR-21 | review.support_assessment、evidence（evidence_role、capture、link_method）、assessment.resolved_fields（basis、evidence_ids） | `POST /review-tasks/{task_id}/decisions`、`POST /reviews/{review_id}:retract` | ADDRESS_ASSESSMENT_CHANGED | AC-18；T-ADDR-09*、T-ADDR-11*；C-RD-01、C-RD-10、C-UE-*、C-SA-*、C-FRS-*、C-AS-03 |
 | FR-22 | source_origin、origin_relation、evidence_derivation、evidence（derivation_type、origin_ids） | `POST /evidence:independence`、`GET /evidence/{evidence_id}/dependents`、`GET /source-origins/{origin_id}`、`POST /origin-relations`、`POST /origin-relations/{relation_id}:retract` | 評估變更事件 | AC-19；T-EVD-06～12；C-EV-*、C-OR-*、C-IR-* |
+| FR-24 | unit_type.layout_fingerprint、source_document（LISTING_PHOTO、LAYOUT_DIAGRAM）、evidence（FEATURE_OBSERVATION） | `GET /registry/unit-types`、`POST /evidence`、覆核 `ADDRESS_CANDIDATE` | ADDRESS_ASSESSMENT_CHANGED | AC-21；T-PHOTO-* |
 | FR-23 | listing_event（notify_eligible、suppression_reason）、listing（first_observed_context、new_listing_status） | `GET /events` | DWELLING_NEW_LISTING、PROPERTY_MERGED、LISTING_FIRST_OBSERVED | AC-20；T-LIFE-13～20；C-EVT-03、C-EVT-08、C-EVT-21～26、C-NT-* |

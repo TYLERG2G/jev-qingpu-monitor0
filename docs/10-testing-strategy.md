@@ -96,6 +96,19 @@
 | T-RULE-06 | 對 R-ALL 送出 `VERIFY_RULE`（附佐證） | 規則變成 VERIFIED → 新 registry_version → 重新評估 | 範圍內符合 K1–K5 的刊登可以變成 CONFIRMED（SYSTEM_RULES） |
 | T-RULE-07 | 規則沒有樓層範圍、或 DIFFERENT_NUMBER 沒有 override | schema 拒絕 | C-DR-02、C-DR-04 |
 
+### 3.3c 坪數與照片格局比對（16；v0.5）
+Fixture（虛構，只供測試）：坪型都設為 VERIFIED、車位口徑已知；C3 30.0 坪；D2 36.1 坪（mirror = L）；D5 36.1 坪（mirror = R）；其他坪型與 C3、D2、D5 的距離都超過 1.0 坪。規則 R-3TO14 存在（HYPOTHETICAL，3–14 樓）；C3 在 2F 也存在。
+
+| ID | 情境 | 推導 | 預期 |
+|----|------|------|------|
+| T-PHOTO-01 | 12F、扣除車位 30.0 坪 | G2 → 17 個 12 樓候選；X6 排除 C3 以外的全部 | `SINGLE_CANDIDATE`（C3-12F）；sales_unit = NARROWED；K2 不成立（推導未驗證），所以不是 CONFIRMED |
+| T-PHOTO-02 | 12F、36.1 坪；照片顯示鏡像 R | X6 → 剩 D2、D5；D5：S3 0.15 + S7 0.1 + S9 0.1 = 0.35；D2：0.15 + 0.1 − 0.3（S10）→ 0 | `MULTIPLE_CANDIDATES`，D5 排第一、領先 0.35 ≥ 0.30 → 建立覆核任務；**D2 不會被硬排除** |
+| T-PHOTO-03 | 同 T-PHOTO-02，但那張照片也出現在另一個社區的刊登（雜湊相同） | I3 → UNKNOWN；`flags ∋ PHOTO_REUSE`；S9、S10 不計分 | D2、D5 都是 0.25 → `MULTIPLE_CANDIDATES`，沒有領先者 |
+| T-PHOTO-04 | 沒有樓層；30.0 坪 | G2 依 R-3TO14（3–14）加上 C3 的 2F → 13 個候選（≤ 40） | `MULTIPLE_CANDIDATES`；sales_unit = NARROWED（C3）；floor = AMBIGUOUS（**照片只辨識到戶別**） |
+| T-PHOTO-05 | 對 T-PHOTO-01 送出 `CONFIRM_CANDIDATE`，佐證只有照片格局比對（FEATURE_OBSERVATION） | H1 ✗（不是直接門牌證據）、H2 ✗ | `INSUFFICIENT`；sales_unit 維持 NARROWED（不是 DIRECT_UNIT） |
+| T-PHOTO-06 | 階段 2 模型輸出 `model_score = 0.92`，指向 D5 | INFERENCE 證據，權重上限等同 S9 +0.3；`calibrated_probability = null` | 與 T-PHOTO-02 相同的排序；不能硬排除 D2，也不能確認 |
+| T-PHOTO-07 | 照片窗景顯示「可俯瞰高鐵站」，人工判斷為高樓層 | S11 → INFERENCE 樓層區間 | `floor_exact = false`；X1、X2 不使用這個區間 |
+
 ### 3.4 證據
 | ID | 情境 | 預期 |
 |----|------|------|
