@@ -11,6 +11,7 @@
 | SRC-BUILDER | https://www.5v.com.tw/projects.php | 建商資料 | 中 | **無法連線（DNS 查無紀錄）**。591 與信義都標示建商為「聯上開發」；5v.com.tw 與該建商的關係只來自搜尋結果（Q-022） |
 | GOV-TY-ADDR | https://opendata.tycg.gov.tw/datalist/ec47dbd5-9ed8-4c8d-8ce1-ccb63b1b72e6 | 門牌名冊 | 高 | **可讀**。「桃園市門牌位置坐標資料」，民政局，每月 CSV，政府資料開放授權條款第 1 版；欄位有號、巷、弄，**沒有樓層**；沒有下載（全市檔案） |
 | GOV-LVR | https://plvr.land.moi.gov.tw/DownloadOpenData | 成交資料 | 中 | **可讀**。開放資料批次檔（本期、非本期），開放授權需註明出處；沒有下載（Q-031） |
+| SRC-YUNGCHING（使用者建議，次要） | https://buy.yungching.com.tw/ | 刊登（可能揭露樓層、坪數、朝向） | 次要 | 2026-10-18：搜尋引擎找不到聯上世界的永慶出售物件（只有一則永慶加盟店在 591 的出租）；站內搜尋需要互動操作 → **請使用者用瀏覽器搜尋，提供物件網址** |
 | SRC-SINYI（M0 新增，次要） | https://www.sinyi.com.tw/communitylist/communityinfo/0026219 | 社區、成交、刊登 | 次要 | **可讀**。聯上世界、77 號、建商聯上開發、14 層、**216 戶**；條款禁止自動擷取 |
 
 **注意**：「樂居」（leju.com.tw）和「樂屋網」是不同的平台。樂居是優先來源；樂屋網只是次要候選。

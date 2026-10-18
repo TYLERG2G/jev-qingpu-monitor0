@@ -63,6 +63,7 @@
 |------|------------------------------|---------|-------|-----------|-----------|------------|
 | SRC-591 | `MANUAL_ONLY` | RESTRICTED（只限人工瀏覽；條款據搜尋摘要禁止未經授權的爬蟲與大量擷取，**原文待人工核對**） | UNKNOWN | UNKNOWN | UNKNOWN | 未找到 API 或資料授權；robots.txt 只封鎖 YandexBot（robots 允許 ≠ 授權） |
 | SRC-SINYI | `MANUAL_ONLY` | RESTRICTED（第 7 條禁止非人為方式擷取） | RESTRICTED | PROHIBITED（未經同意） | PROHIBITED（第 19、20 條） | 原文已讀（修訂日 2025-06-12） |
+| SRC-YUNGCHING（2026-10-18 19:4x 新查） | `MANUAL_ONLY` | UNKNOWN（沒有找到明確的自動擷取條款） | UNKNOWN | UNKNOWN | PROHIBITED（頁尾聲明：「未經正式書面同意，禁止轉貼節錄」） | 搜尋引擎沒有找到聯上世界的永慶出售物件；站內關鍵字搜尋需要互動操作，沒有逐頁翻找（避免爬取）；條款頁：buy.yungching.com.tw/Information/agreement（只讀到搜尋摘要） |
 | SRC-LEJU | `MANUAL_ONLY`（待使用者確認瀏覽器能否存取） | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | 自動化請求 403；條款未取得 |
 | SRC-BUILDER | — | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | DNS 無法解析 |
 | GOV-LVR | `PUBLIC_WEB`（開放資料批次下載） | ALLOWED | ALLOWED | — | ALLOWED（需註明出處） | 政府網站資料開放宣告；只有成交，不是刊登 |
