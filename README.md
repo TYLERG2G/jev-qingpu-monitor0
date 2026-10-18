@@ -33,7 +33,7 @@
 | 需求 | [00 待決事項](docs/00-open-questions.md) · [01 需求與追溯](docs/01-requirements.md) · [02 名詞與地址規則](docs/02-domain-and-glossary.md) |
 | 資料 | [03 資料來源與權利](docs/03-data-sources-and-compliance.md) · [05 資料模型](docs/05-data-model.md) |
 | 判斷邏輯 | [06 社區歸屬與完整門牌推斷](docs/06-address-verification.md) · [13 同屋辨識與合併治理](docs/13-identity-resolution.md) · [16 坪型指紋與照片比對](docs/16-layout-photo-matching.md) |
-| 查證 | [M0 可行性報告](docs/research/m0-feasibility-report.md) · [門牌對照 CSV](docs/research/lianshang-world-address-mapping.csv) · [房源抽樣](docs/research/listing-sample-analysis.md) · [樂居整理樣板](docs/research/leju-layout-intake-template.csv) · [樂居格局分析](docs/research/leju-layout-analysis.md) |
+| 查證 | [M0 可行性報告](docs/research/m0-feasibility-report.md) · [門牌對照 CSV](docs/research/lianshang-world-address-mapping.csv) · [房源抽樣](docs/research/listing-sample-analysis.md) · [樂居整理樣板](docs/research/leju-layout-intake-template.csv) · [樂居格局分析](docs/research/leju-layout-analysis.md) · [坪數參考表](docs/research/unit-area-reference.csv) · [候選試算](docs/research/poc-candidate-trials.md) |
 | 流程 | [04 架構](docs/04-architecture.md) · [07 監控生命週期](docs/07-monitoring-pipeline.md) |
 | 契約 | [08 API 說明](docs/08-api-contract.md) · [`api/openapi.yaml`](api/openapi.yaml) · [12 事件契約](docs/12-event-contract.md) · [`api/examples/contract-cases.yaml`](api/examples/contract-cases.yaml) |
 | 品質與維運 | [09 資安・個資・維運](docs/09-security-privacy-ops.md) · [10 測試與評估](docs/10-testing-strategy.md) · [15 一致性檢查表](docs/15-consistency-checklist.md) |

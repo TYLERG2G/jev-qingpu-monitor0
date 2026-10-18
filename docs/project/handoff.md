@@ -5,6 +5,7 @@
 - 使用者已提供 2 張樂居截圖（門牌示意圖、「…9.11.13F平面圖」）；觀察結果記在 source-log §3 與 M0 報告 §7a。樂居門牌圖與 591 疑似同源，**不算獨立佐證**。
 - 樂居平面圖已分析：[leju-layout-analysis.md](../research/leju-layout-analysis.md)。D 棟 5 戶的排列與門牌示意圖逐格吻合（推論方向一致）；各棟是鏡像配對；坪數可以直接分出 C3、D3、C5 等唯一戶別，其他戶別要靠照片判斷前排或後排、左右鏡像。需要清晰版本的平面圖來確認戶別編號。
 - 19:09 收到的「cad_architectural_floorplan_7_9_11_13f」圖判斷為 AI 重繪圖（標示重複、A3/A5 左右相反、文字亂碼），**不採用**；已在 16 §6 加上規則：AI 增強圖片不能當成來源事實。
+- **下一階段（D-017）進行中**：官方實價登錄 115S3 已下載並篩選（1 筆，與 591 一致）；坪數參考表 [unit-area-reference.csv](../research/unit-area-reference.csv)；13 則刊登的候選試算 [poc-candidate-trials.md](../research/poc-candidate-trials.md)：12 則縮小到 1 戶或 1 組鏡像配對，4 則揭露樓層的縮小到 2 個完整門牌候選；D2／D5 型 7 則 591 刊登推論只有約 2 戶。
 - v0.4：M0 資料可行性查證完成。
 - **M0 結果**：見 [M0 可行性報告](../research/m0-feasibility-report.md)、[門牌對照 CSV](../research/lianshang-world-address-mapping.csv)、[房源抽樣分析](../research/listing-sample-analysis.md)。重點：17 組戶別→號原圖已核對、全部一致，但**沒有獨立佐證**；沒有逐層名冊（只有 2F 平面圖）；所有推導規則都是 HYPOTHETICAL 或 TRANSCRIBED_UNVERIFIED；591 刊登只能辨識到社區層級，信義刊登可以縮小到 2–4 個門牌候選；**沒有找到任何授權的自動刊登來源**。建議進入「資料補齊 + 離線概念驗證」。
 - M0 依 D-015 只做唯讀查詢：沒有爬蟲、沒有大量下載、沒有登入、沒有繞過 403、沒有聯繫平台。591 平面圖 4 張只存在工作階段暫存區，沒有放進 repo。
