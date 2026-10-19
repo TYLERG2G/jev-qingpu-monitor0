@@ -1,8 +1,8 @@
 # 交接
 
 ## 目前狀態（2026-10-18）
-- **v0.6：功能完整、尚未用真實模型測試**（D-018、D-020、D-113）。見 [17 實作狀態](../17-implementation-status.md)、[18 使用手冊](../18-user-guide.md)。`pytest` 103 passed；社區總覽、591 書籤匯入（D-019）、JEV 決策模型（OpenAI／OpenRouter／TypeSafe，軟計分）、評估工具、通知規則（Email／Telegram）、匯出；地基修正：錯誤處理、schema 遷移、交易、備份、日誌、Host 檢查、自動金鑰。正式資料庫 `data/jev.db`（13 則真實記錄＋1 次書籤匯入）。**決策模型從未呼叫外部**；下一步是使用者同意後用 `jev eval` 測試。尚未 commit（等使用者指示）。
-- 版本：v0.5（已 commit 到本機 `main`；尚未連到 GitHub）。依 D-016 調整戶別辨識方法：坪數篩選 + 591 刊登照片格局比對 + 樂居格局圖；規格見 [16](../16-layout-photo-matching.md)。樂居第二次唯讀查詢仍然 403，**改由使用者人工整理**，請填寫 [`leju-layout-intake-template.csv`](../research/leju-layout-intake-template.csv)（每列一個戶別；只填格局特徵與坪數，不要貼上圖片；記錄頁面網址、位置與觀測時間）。
+- **v0.6：功能完整、尚未用真實模型測試**（D-018、D-020、D-113）。見 [17 實作狀態](../17-implementation-status.md)、[18 使用手冊](../18-user-guide.md)。`pytest` 103 passed；社區總覽、591 書籤匯入（D-019）、JEV 決策模型（OpenAI／OpenRouter／TypeSafe，軟計分）、評估工具、通知規則（Email／Telegram）、匯出；地基修正：錯誤處理、schema 遷移、交易、備份、日誌、Host 檢查、自動金鑰。正式資料庫 `data/jev.db`（13 則真實記錄＋1 次書籤匯入）。**決策模型從未呼叫外部**；下一步是使用者同意後用 `jev eval` 測試。已 commit（`4a23b1b`）並推送到 GitHub。
+- 先前版本 v0.5：依 D-016 調整戶別辨識方法：坪數篩選 + 591 刊登照片格局比對 + 樂居格局圖；規格見 [16](../16-layout-photo-matching.md)。樂居第二次唯讀查詢仍然 403，**改由使用者人工整理**，請填寫 [`leju-layout-intake-template.csv`](../research/leju-layout-intake-template.csv)（每列一個戶別；只填格局特徵與坪數，不要貼上圖片；記錄頁面網址、位置與觀測時間）。
 - 使用者已提供 2 張樂居截圖（門牌示意圖、「…9.11.13F平面圖」）；觀察結果記在 source-log §3 與 M0 報告 §7a。樂居門牌圖與 591 疑似同源，**不算獨立佐證**。
 - 樂居平面圖已分析：[leju-layout-analysis.md](../research/leju-layout-analysis.md)。D 棟 5 戶的排列與門牌示意圖逐格吻合（推論方向一致）；各棟是鏡像配對；坪數可以直接分出 C3、D3、C5 等唯一戶別，其他戶別要靠照片判斷前排或後排、左右鏡像。需要清晰版本的平面圖來確認戶別編號。
 - 19:09 收到的「cad_architectural_floorplan_7_9_11_13f」圖判斷為 AI 重繪圖（標示重複、A3/A5 左右相反、文字亂碼），**不採用**；已在 16 §6 加上規則：AI 增強圖片不能當成來源事實。
@@ -13,7 +13,7 @@
 - 先前（v0.3.1）：**沒有任何實作、爬蟲、部署或外部聯繫。**
 - v0.3 修正第二輪審閱的 4 項問題（D-106～D-109，【建議預設】）；v0.3.1 依使用者指示（D-011～D-014）修正 04、獨立性規則與新案去重。
 - 已執行離線檢查（見 [15](../15-consistency-checklist.md)），0 個未解決問題。業務行為測試（10 §3）全部只是規劃，尚未執行。
-- 版本控制：已建立**本機** git repo（`main` 分支）。**尚未連到 GitHub**；使用者決定之後再連，可見性用 Private（D-014）。
+- 版本控制：`main` 分支已推送到 GitHub：https://github.com/TYLERG2G/jev-qingpu-monitor0 （2026-10-19；可見性依 D-014 應為 Private，由使用者在 GitHub 確認）。`.env`、資料庫、備份、日誌、照片都被 git 排除。
 - 狀態：等待使用者審閱。
 
 ## 讀文件的順序
@@ -44,7 +44,7 @@ v0.3 修訂期間，`docs/04-architecture.md` 被外部整份改寫。v0.3.1 依
 1. 審閱 M0 報告；決定是否 commit v0.4。
 2. 資料補齊（M0 報告 §8）：使用者用一般瀏覽器確認樂居銷控表；決定是否下載一期官方實價登錄與桃園門牌 CSV（Q-031）；設法取得戶別→號的獨立佐證（例如現場門牌）。
 3. 回覆新的待確認事項：Q-029（地圖定位欄與「該層戶數」規則）、Q-030（是否洽詢授權）、Q-031、Q-032，以及既有的 P0、P1。
-4. 決定何時連到 GitHub（Private）。本機沒有 `gh`；可以在 github.com/new 建空的 repo，再設定 remote 推送（本次依指示沒有設定 remote）。
+4. ~~決定何時連到 GitHub~~：已完成（2026-10-19，remote `origin`）。之後的變更用 `git push` 同步；推送前確認沒有 `.env` 或資料檔。
 5. 確認 MVP 範圍（ADR-001）後才進入實作規劃。
 
 ## 注意事項（給下一位協作者）
