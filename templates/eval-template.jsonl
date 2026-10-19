@@ -1,0 +1,9 @@
+# JEV 決策模型評估題目範本（JSONL：一行一題；# 開頭的行會被略過）。複製到 data/eval/ 再改，照片也放 data/eval/（已被 git 排除）。
+# gold 要是你「確定」的答案：現場看過、管委會資料，或刊登明寫且你核對過的；不確定的照片不要放進來。
+# question：layout_front_row（窗景面對高鐵南路？true/false）、floor_band（0 低 2–5F、1 中 6–10F、2 高 11–14F）、
+#           membership_text（文字描述就是聯上世界？true/false）、same_dwelling（兩則刊登同一戶？true/false）
+# 先執行 python -m jev eval data/eval/你的檔案.jsonl --dry-run 檢查請求內容（不連網），再拿掉 --dry-run 真的測。
+{"id": "view-front-01", "question": "layout_front_row", "images": ["data/eval/photos/front-01.jpg"], "gold": true, "state": {"權狀坪數": 43.92, "樓層": "9樓/14樓"}, "note": "範例：現場確認是 103 號（D2，前排）"}
+{"id": "view-back-01", "question": "layout_front_row", "images": ["data/eval/photos/back-01.jpg"], "gold": false, "note": "範例：現場確認是 107 號（D5，後排）"}
+{"id": "floor-high-01", "question": "floor_band", "images": ["data/eval/photos/high-01.jpg"], "gold": 2, "note": "範例：12 樓"}
+{"id": "text-near-01", "question": "membership_text", "state": {"標題": "近聯上世界 A18 高鐵站 三房", "社區": "青埔之星"}, "gold": false, "note": "範例：只是在附近"}

@@ -1,0 +1,16 @@
+{
+  "_note": "人工整理的最小樣本：只保留解析需要的欄位文字與結構化資料，數值取自 2026-10-18 人工記錄的 591 刊登 20790495；不是原始頁面，不含仲介姓名或電話。",
+  "href": "https://sale.591.com.tw/home/house/detail/2/20790495.html",
+  "title": "青埔A18門戶宅｜聯上世界2+1房車位 - 591售屋網",
+  "text": "中古屋\n桃園市\n大園區\n萬元\n（含車位價格）\n房屋資料\n車位\n：\n7.81坪，平面式，已含售金內\n總價（含車位）：2,188萬\n坪數：43.922坪（含車位7.807坪，主建物20.733坪）\n格局：2房2廳1衛（2+1房）\n樓層：9樓／14樓，大樓\n屋齡：11.1年，社區：聯上世界\n（仲介，收取服務費）\n經紀業：範例不動產有限公司\n熱門社區\n金滿意",
+  "ld": [{"@graph": [{"@type": ["Product", "Apartment"], "name": "青埔A18門戶宅｜聯上世界2+1房車位", "sku": "S20790495",
+    "url": "https://sale.591.com.tw/home/house/detail/2/20790495.html",
+    "description": "桃園市大園區住宅出售：總價2188萬，面積43.92坪，位於聯上世界，更多出售詳情，就上591售屋網！",
+    "address": {"@type": "PostalAddress", "streetAddress": "桃園市大園區高鐵南路一段"},
+    "floorSize": {"value": 43.92, "unitText": "坪"}, "numberOfRooms": 3, "offers": {"price": 21880000, "priceCurrency": "TWD"},
+    "image": ["https://img1.591.com.tw/house/2026/08/25/a.jpeg!1000x.water2.jpeg", "https://evil.example/x.jpg"]}]}],
+  "links": [
+    {"href": "https://market.591.com.tw/50428", "text": "金滿意", "recommended": true},
+    {"href": "https://market.591.com.tw/9488", "text": " 聯上世界 ", "recommended": false}
+  ]
+}

@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JEV 聯上世界</title>
+<style>
+:root{
+  --bg:#f6f5f1;--panel:#fff;--ink:#1d2321;--muted:#66706c;--line:#e2e0d8;--soft:#efede6;
+  --accent:#1f6f5c;--accent-ink:#fff;--warn:#b26b00;--bad:#b3261e;--good:#1f7a3a;--info:#2b5c9e;
+  --heat:31,111,92;
+  font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141716;--panel:#1c201e;--ink:#e6e9e7;--muted:#9aa49f;--line:#2e3431;--soft:#232826;
+  --accent:#4fb393;--accent-ink:#0d1512;--warn:#e0a040;--bad:#ef7b72;--good:#6fce8a;--info:#86aee8;--heat:79,179,147;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:18px;margin:0;letter-spacing:.02em}
+h1 small{font-weight:400;color:var(--muted);margin-left:8px;font-size:13px}
+.key{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+textarea{width:100%;min-height:54px}
+button{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:5px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}
+main{padding:16px 24px 48px;max-width:1500px;margin:0 auto}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+nav button{border-radius:999px}
+nav button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 8px}
+.card h3{font-size:13px;margin:12px 0 6px;color:var(--muted);font-weight:600}
+.note{color:var(--muted);font-size:12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover,tbody tr.sel{background:var(--soft)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;border-radius:999px;padding:0 8px;font-size:12px;border:1px solid currentColor;line-height:18px}
+.b-good{color:var(--good)}.b-warn{color:var(--warn)}.b-bad{color:var(--bad)}.b-info{color:var(--info)}.b-muted{color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:1100px){.layout{grid-template-columns:1fr}}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.field{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.field span{display:block;font-size:11px;color:var(--muted)}
+.field b{font-weight:600}
+.grid{border-collapse:separate;border-spacing:3px;width:auto}
+.grid th,.grid td{border:0;padding:0;text-align:center;font-size:11px}
+.grid td.cell{width:40px;height:24px;border-radius:4px;background:var(--soft);font-variant-numeric:tabular-nums;cursor:default}
+.grid td.cell.ex{background:repeating-linear-gradient(45deg,var(--soft),var(--soft) 3px,transparent 3px,transparent 6px);color:var(--muted)}
+.grid td.cell.none{background:transparent;border:1px dashed var(--line)}
+.grid td.cell.top{outline:2px solid var(--accent)}
+.grid td.cell.conf{background:var(--good);color:#fff}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+.hits{margin:0;padding-left:18px}
+.hits li{white-space:normal}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.task{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--panel)}
+.task header{all:unset;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.form{border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:6px}
+.toast{position:fixed;right:16px;bottom:16px;max-width:420px;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.25);white-space:pre-wrap}
+.empty{color:var(--muted);padding:12px 0}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:150px 230px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+@media (max-width:800px){.tl li{grid-template-columns:1fr}}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.thumbs img{width:96px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.pick{position:relative;cursor:pointer}.pick input{position:absolute;left:4px;top:4px}.pick.on img{outline:3px solid var(--accent)}
+.ans{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:4px 0}
+.bar{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:3px}.bar i{display:block;height:100%;background:var(--accent)}
+.blocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.block{border:1px solid var(--line);border-radius:10px;padding:10px}
+.block h3{margin:0 0 8px;font-size:13px}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:6px}
+.unit{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--soft);min-height:74px}
+.unit b{font-size:14px}.unit .n{float:right;color:var(--muted);font-size:12px}
+.unit.has{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.unit.void{background:transparent;border-style:dashed;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.chip{font-size:11px;border-radius:999px;padding:0 6px;background:var(--panel);border:1px solid var(--line);cursor:pointer}
+.gap{display:grid;grid-template-columns:28px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.gap .p{width:24px;height:24px;border-radius:999px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>JEV · 聯上世界房源監控 <small>本機</small></h1>
+  <div class="key"><a href="/tools" style="color:inherit">591 匯入工具</a> · API key <input id="key" size="14" aria-label="API key"> <button id="reload">重新整理</button></div>
+</header>
+<main>
+  <p class="note">規則分數（rule_score）不是機率。名冊的戶別→門牌號目前全部是「轉錄未驗證」，所以系統不會自行宣稱門牌已確認；只有人工佐證（H1–H6）或驗證後的名冊（K1–K5）才會變成 CONFIRMED。資料只來自人工記錄與官方開放資料。</p>
+  <section class="stats" id="stats"></section>
+  <nav role="tablist" id="tabs"></nav>
+  <section id="view"></section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtPrice = n => n == null ? "—" : (n / 10000).toLocaleString("zh-TW", {maximumFractionDigits: 0}) + " 萬";
+let KEY = "__JEV_LOCAL_KEY__";  // 由本機伺服器帶入（頁面只在 127.0.0.1 提供）
+try { const saved = localStorage.getItem("jev-key"); if (saved && KEY.startsWith("__")) KEY = saved; } catch (e) {}
+$("#key").value = KEY;
+
+const RULES = {
+  M1:"門牌號在名冊（mapping 已驗證）", M1u:"門牌號在名冊（mapping 未驗證）", M2:"平台社區標記", M3:"標題或社區欄位有聯上世界", M4:"路段為高鐵南路一段",
+  N1:"明寫其他路段門牌", N4:"「近聯上世界」等字樣", HUMAN_REVIEW:"人工覆核",
+  S1:"明寫門牌一致", S2:"明寫戶別一致", S3:"坪數與坪型相符", S4:"房數", S5:"落地窗方位", S7:"樓層一致", S9:"照片格局符合", S10:"照片格局不符",
+  S12:"該層戶數", X4:"明寫戶別不同", X5:"明寫門牌不同（推導已驗證）", X5s:"明寫門牌不同（軟反駁）", X7s:"此樓層沒有推導規則涵蓋", G5:"坪數不在容差內",
+  HUMAN_REJECT:"人工排除",
+};
+const OUTCOME = {
+  MEMBER:["屬於社區","b-good"], LIKELY_MEMBER:["可能屬於","b-warn"], UNDETERMINED:["無法判定","b-muted"], NON_MEMBER:["不屬於","b-bad"], CONFLICTING:["衝突","b-bad"],
+  CONFIRMED:["門牌已確認","b-good"], SINGLE_CANDIDATE:["單一候選","b-info"], MULTIPLE_CANDIDATES:["多個候選","b-warn"], INSUFFICIENT_INFO:["資訊不足","b-muted"],
+  NO_CANDIDATE:["無候選","b-bad"], NOT_EVALUATED:["未評估","b-muted"], ABSTAINED:["人工棄答","b-muted"],
+  ACTIVE:["上架中","b-good"], DELISTED:["已下架","b-muted"], INACTIVE:["已無上架","b-muted"],
+};
+const FIELD = {NARROWED:["已縮小","b-info"], AMBIGUOUS:["多個可能","b-warn"], UNKNOWN:["未知","b-muted"], CONFIRMED:["已確認","b-good"]};
+const fbadge = st => { const [t, c] = FIELD[st] || [st || "—", "b-muted"]; return `<span class="badge ${c}">${t}</span>`; };
+const badge = o => { const [t, c] = OUTCOME[o] || [o ?? "—", "b-muted"]; return `<span class="badge ${c}">${esc(t)}</span>`; };
+
+async function api(method, path, body, extra = {}) {
+  const headers = {"X-API-Key": KEY, ...extra};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (method === "POST") headers["Idempotency-Key"] = headers["Idempotency-Key"] || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
+  const r = await fetch("/api/v1" + path, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+  const data = r.status === 204 ? {} : await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`${r.status} ${data.code || ""}\n${data.detail || ""}`);
+  return data;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 5000); }
+
+const S = {tab: "overview", sel: null, photoUrls: {}};
+try { S.photoUrls = JSON.parse(sessionStorage.getItem("jev-photo-urls") || "{}"); } catch (e) {}
+function savePhotoUrls() { try { sessionStorage.setItem("jev-photo-urls", JSON.stringify(S.photoUrls)); } catch (e) {} }
+{ const raw = location.hash.slice(1);
+  if (raw.startsWith("import=")) {  // 由「591 → JEV」書籤帶入；只預填表單，不會自動寫入
+    try { S.imp = JSON.parse(decodeURIComponent(raw.slice(7))); S.tab = "import"; } catch (e) { S.impErr = String(e); S.tab = "import"; }
+    history.replaceState(null, "", location.pathname);
+  } else {
+    const h = new URLSearchParams(raw);  // 例如 #listing=3、#tab=review
+    if (h.get("tab")) S.tab = h.get("tab");
+    if (h.get("listing")) { S.tab = "listings"; S.sel = +h.get("listing"); }
+  } }
+let REG = null;  // dwelling_id → {code, floor, number}
+
+async function loadRegistry() {
+  const [units, dwell, maps, addrs] = await Promise.all([
+    api("GET", "/registry/sales-units"), api("GET", "/registry/dwellings"), api("GET", "/registry/mappings"), api("GET", "/registry/address-units")]);
+  const su = Object.fromEntries(units.items.map(u => [u.id, u]));
+  const au = Object.fromEntries(addrs.items.map(a => [a.id, a]));
+  const num = {}, mstat = {};
+  for (const m of maps.items) if (m.mapping_type === "SALES_UNIT_TO_NUMBER") {
+    num[m.from_id] = m.record_status === "RETRACTED" ? null : au[m.to_id]?.normalized.number; mstat[m.from_id] = m.record_status; }
+  REG = {units: units.items.sort((a, b) => a.code.localeCompare(b.code)), dw: {}, num, mstat, maps: maps.items, su};
+  for (const d of dwell.items) REG.dw[d.id] = {code: su[d.sales_unit_id].code, floor: d.floor, number: num[d.sales_unit_id]};
+}
+
+async function refresh() {
+  try {
+    await loadRegistry();
+    const [listings, tasks, events, notes, props] = await Promise.all([
+      api("GET", "/listings"), api("GET", "/review-tasks"), api("GET", "/events"), api("GET", "/notifications"), api("GET", "/properties")]);
+    S.data = {listings: listings.items, tasks: tasks.items, events: events.items, notes: notes.items, props: props.items};
+    const details = await Promise.all(listings.items.map(l => api("GET", `/listings/${l.id}`)));
+    S.details = Object.fromEntries(details.map(d => [d.id, d]));
+    renderStats(); renderTabs(); render();
+  } catch (e) { $("#view").innerHTML = `<div class="card"><h2>無法讀取資料</h2><p class="mono">${esc(e.message)}</p><p class="note">確認 API key 與伺服器：python -m jev serve</p></div>`; }
+}
+
+function renderStats() {
+  const d = S.data, L = d.listings;
+  const daily = d.tasks.filter(t => t.priority < 5).length;
+  const groups = d.props.filter(p => p.listing_ids.length > 1).length;
+  const cells = [
+    [L.length, "刊登（人工記錄）"], [L.filter(l => l.membership_status === "MEMBER").length, "判定屬於聯上世界"],
+    [L.filter(l => S.details[l.id]?.address_assessment?.resolved_fields?.sales_unit?.status === "NARROWED").length, "戶別已唯一"],
+    [L.filter(l => { const c = S.details[l.id]?.address_assessment?.candidates || []; return c.length > 0 && c.length <= 2; }).length, "完整門牌 ≤ 2 個候選"],
+    [L.filter(l => l.address_status === "CONFIRMED").length, "門牌已確認"], [groups, "同屋群組（多則刊登）"],
+    [daily, "待覆核"], [d.notes.length, "通知（含更正）"]];
+  $("#stats").innerHTML = cells.map(([v, t]) => `<div class="stat"><b>${v}</b><span>${t}</span></div>`).join("");
+}
+
+const TABS = [["overview", "社區總覽"], ["listings", "刊登與門牌"], ["review", "覆核"], ["props", "同屋群組"], ["events", "事件與通知"], ["registry", "名冊"], ["import", "匯入"]];
+function renderTabs() {
+  $("#tabs").innerHTML = TABS.map(([k, t]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${t}${k === "review" ? ` (${S.data.tasks.filter(x => x.priority < 5).length})` : ""}</button>`).join("");
+  document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; renderTabs(); render(); });
+}
+function render() { ({overview: viewOverview, listings: viewListings, review: viewReview, props: viewProps, events: viewEvents, registry: viewRegistry, import: viewImport})[S.tab](); }
+
+// ---------------- 社區總覽
+const POS = {TL: [1, 1], TR: [1, 2], ML: [2, 1], MR: [2, 2], BL: [3, 1], BR: [3, 2]};
+function openListing(id) { S.tab = "listings"; S.sel = id; renderTabs(); render(); }
+async function viewOverview() {
+  const o = await api("GET", "/community/overview");
+  const s = o.summary;
+  const blocks = {};
+  for (const u of o.units) (blocks[u.building || "?"] = blocks[u.building || "?"] || []).push(u);
+  const unitCard = u => {
+    const [r, c] = POS[u.block_position] || [1, 1];
+    const area = u.area_min == null ? "坪數未知" : (u.area_min === u.area_max ? `${u.area_min} 坪` : `${u.area_min}–${u.area_max} 坪`);
+    const chips = u.listings.filter(x => x.status === "ACTIVE").map(x =>
+      `<span class="chip" data-open="${x.id}" title="${esc(x.floor_text || "樓層未揭露")}${x.shared_with.length ? "；也可能是 " + esc(x.shared_with.join("、")) : ""}">#${x.id}${x.shared_with.length ? "?" : ""} ${esc(x.floor_text ? x.floor_text.split("/")[0] : "?F")}</span>`).join("");
+    return `<div class="unit ${u.active_count ? "has" : ""}" style="grid-row:${r};grid-column:${c}">
+      <b>${esc(u.code)}</b><span class="n">${u.number}號</span>
+      <div class="note">${area}${u.area_source === "MIRROR_PAIR" ? "（借用鏡像戶）" : ""}${u.rooms ? `・${u.rooms} 房` : ""}</div>
+      <div class="note">${u.mapping_status === "VERIFIED" ? '<span class="badge b-good">門牌已驗證</span>' : "門牌對照未驗證"}${u.min_price ? `・最低 ${fmtPrice(u.min_price)}` : ""}</div>
+      <div class="chips">${chips}</div></div>`;
+  };
+  const blockHtml = Object.entries(blocks).map(([b, us]) => {
+    const used = new Set(us.map(u => u.block_position));
+    const voids = Object.keys(POS).filter(k => !used.has(k) && (k[0] !== "M" || b === "D")).map(k => {
+      const [r, c] = POS[k]; return `<div class="unit void" style="grid-row:${r};grid-column:${c}">${b === "D" && k === "ML" ? "梯間" : ""}</div>`; }).join("");
+    return `<div class="block"><h3>${esc(b)} 棟 <span class="note">${us.length} 戶／層</span></h3><div class="bgrid">${us.map(unitCard).join("")}${voids}</div></div>`;
+  }).join("");
+  const tx = o.transactions;
+  $("#view").innerHTML = `
+    <div class="card"><h2>JEV 對聯上世界能做什麼</h2>
+      <p>每匯入一則刊登，JEV 會自動判斷 ① 是否屬於聯上世界、② 是哪一戶哪一層（列出完整門牌候選與依據）、③ 是否和其他刊登是同一戶；
+      重複匯入同一則可以追蹤降價、下架與重新上架。目前：<b>${s.member}</b> 則屬於社區，<b>${s.within_two}</b> 則已縮小到 2 個以內的門牌，
+      <b>${s.confirmed}</b> 則門牌已確認。</p>
+      <p class="note">名冊 ${s.units} 個戶別、推估 ${s.dwellings_estimate} 戶住宅；門牌對照已驗證 ${s.mapping_verified}／${s.units}。下方「缺口與下一步」依對準確度的幫助排序。</p>
+      <p class="note" id="jev-status"></p></div>
+    <div class="layout"><div class="card"><h2>各棟各戶</h2><p class="note">外框加粗＝有上架刊登；標籤 #編號＝刊登與樓層，帶「?」表示可能是這戶或其鏡像戶。點標籤看分析。</p>
+      <div class="blocks">${blockHtml}</div></div>
+    <div><div class="card"><h2>缺口與下一步</h2>${o.gaps.map((g, i) => `<div class="gap"><span class="p">${i + 1}</span><div><b>${esc(g.title)}</b>
+        <div class="note">${esc(g.why)}</div><div>→ ${esc(g.action)}</div>
+        ${(g.listing_ids || []).length ? `<div class="chips">${g.listing_ids.map(id => `<span class="chip" data-open="${id}">${listingLabel(id)}</span>`).join("")}</div>` : ""}</div></div>`).join("") || '<div class="empty">目前沒有缺口</div>'}</div>
+      <div class="card"><h2>開價行情（依坪型）</h2><div class="scroll"><table><thead><tr><th>坪型</th><th>戶數</th><th>總價範圍</th><th>單價中位數</th></tr></thead><tbody>
+        ${o.market.map(m => `<tr><td>${esc(m.group)}</td><td class="num">${m.count}</td><td class="num">${fmtPrice(m.min_price)}–${fmtPrice(m.max_price)}</td><td class="num">${m.median_unit_price_wan ?? "—"} 萬/坪</td></tr>`).join("")}
+        </tbody></table></div><p class="note">同一戶的多則刊登只算一次最低價。單價＝總價（含車位價）÷ 扣除車位後的坪數，只是開價參考。</p></div>
+      <div class="card"><h2>官方實價登錄成交</h2>${tx.total ? `<table><thead><tr><th>戶別</th><th>號</th><th>筆數</th><th>樓層</th><th>坪數（扣車位）</th></tr></thead><tbody>
+        ${tx.by_unit.filter(t => t.count).map(t => `<tr><td>${t.unit}</td><td>${t.number}</td><td class="num">${t.count}</td><td>${t.floors.join("、")}</td><td>${t.pings.join("、")}</td></tr>`).join("")}</tbody></table>`
+        : '<div class="empty">尚未匯入。下載內政部實價登錄開放資料後執行 python -m jev lvr 檔案.zip --import</div>'}
+        <p class="note">共 ${tx.total} 筆。可檢查「同一號各樓層坪數一致」（推導規則），並把刊登坪數直接對到門牌號；鏡像戶坪數相同，無法用這個方法分辨。</p></div>
+      <div class="card"><h2>門牌推導規則</h2>${o.rules.map(r => `<div>${esc(r.code)}：${r.floors} 樓 <span class="badge ${r.status === "VERIFIED" ? "b-good" : "b-warn"}">${r.status}</span></div>`).join("")}</div>
+    </div></div>`;
+  document.querySelectorAll("[data-open]").forEach(el => el.onclick = () => openListing(+el.dataset.open));
+  api("GET", "/decisions/status").then(st => { $("#jev-status").innerHTML = st.enabled
+    ? `JEV 決策模型：<b>${esc(st.provider)} · ${esc(st.model || "")}</b>（本月 US$${st.month_spend_usd.toFixed(4)}${st.monthly_budget_usd != null ? " / " + st.monthly_budget_usd : ""}）`
+    : `JEV 決策模型：未啟用${st.problems.length ? "（" + esc(st.problems.join("；")) + "）" : ""}。在 .env 設定後重新啟動伺服器即可使用。`; }).catch(() => {});
+}
+
+// ---------------- 刊登與門牌
+async function viewListings() {
+  const details = S.data.listings.map(l => S.details[l.id]);
+  const rows = details.map(d => {
+    const s = d.latest_snapshot || {}, a = d.address_assessment, f = a?.resolved_fields || {};
+    const unit = f.sales_unit?.value || (a?.candidates || []).map(c => REG.dw[c.dwelling_id]?.code).filter((v, i, x) => x.indexOf(v) === i).slice(0, 4).join("／");
+    const cnt = a?.candidate_count || 0;
+    const top = cnt && cnt <= 2 ? (a?.candidates || []).slice(0, 2).map(c => { const w = REG.dw[c.dwelling_id]; return w ? `${w.number ?? "?"}號${w.floor}樓` : ""; }).join("、")
+      : cnt ? `${cnt} 個候選（${s.floor_text ? "看分析" : "樓層未知"}）` : "";
+    return `<tr class="click ${S.sel === d.id ? "sel" : ""}" data-id="${d.id}">
+      <td>${d.id}</td><td>${esc(d.source_code.replace("SRC-", ""))} <span class="mono">${esc(d.external_id)}</span></td>
+      <td class="num">${fmtPrice(s.total_price)}</td><td class="num">${s.building_ping ?? "—"}</td><td>${esc(s.floor_text || "—")}</td>
+      <td>${badge(d.status)}</td><td>${badge(d.membership_status)}</td><td>${badge(d.address_status)}</td>
+      <td>${esc(unit || "—")}</td><td>${esc(top || "—")}</td><td class="num">${d.property_id}</td></tr>`;
+  }).join("");
+  $("#view").innerHTML = `<div class="layout"><div class="card"><h2>刊登</h2><div class="scroll"><table>
+    <thead><tr><th>#</th><th>來源／編號</th><th>總價</th><th>坪數</th><th>樓層</th><th>狀態</th><th>社區歸屬</th><th>門牌</th><th>戶別</th><th>門牌候選</th><th>群組</th></tr></thead>
+    <tbody>${rows}</tbody></table></div><p class="note">點一列看判斷依據。坪數含車位（591 的標示方式）時系統會換算成主建物＋附屬後比對坪型。</p></div>
+    <div id="detail"><div class="card empty">選一則刊登，查看社區歸屬、戶別×樓層候選與規則依據。</div></div></div>`;
+  document.querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => { S.sel = +tr.dataset.id; document.querySelectorAll("tr.sel").forEach(x => x.classList.remove("sel")); tr.classList.add("sel"); showDetail(S.sel); });
+  if (S.sel) showDetail(S.sel);
+}
+
+async function showDetail(id) {
+  const d = S.details[id] || await api("GET", `/listings/${id}`);
+  const cands = await api("GET", `/listings/${id}/candidates`);
+  const s = d.latest_snapshot || {}, m = d.membership_assessment, a = d.address_assessment, f = a?.resolved_fields || {};
+  const byCell = {};
+  for (const c of cands) { const w = REG.dw[c.dwelling_id]; if (w) byCell[`${w.code}|${w.floor}`] = {...c, ...w}; }
+  const live = cands.filter(c => !c.excluded);
+  const max = Math.max(0.01, ...live.map(c => c.rule_score));
+  const topScore = live.length ? Math.max(...live.map(c => c.rule_score)) : null;
+  const units = REG.units.map(u => u.code), floors = [];
+  for (let fl = 14; fl >= 2; fl--) floors.push(fl);
+  const conf = f.full_address?.status === "CONFIRMED" ? f.full_address.value : null;
+  const head = units.map(u => `<th>${u}<br><span class="note">${REG.num[REG.units.find(x => x.code === u).id] ?? "?"}號</span></th>`).join("");
+  const grid = floors.map(fl => `<tr><th>${fl}F</th>${units.map(u => {
+      const c = byCell[`${u}|${fl}`];
+      if (!c) return `<td class="cell none" title="不在候選中"></td>`;
+      if (c.excluded) return `<td class="cell ex" title="${esc(u)} ${fl}F：已排除（${esc(RULES[c.excluded_by_rule] || c.excluded_by_rule)}）">×</td>`;
+      const isConf = conf && conf.includes(`${c.number}號${fl}樓`);
+      const alpha = 0.12 + 0.75 * (c.rule_score / max);
+      const tip = `${u} ${fl}F → ${c.number ?? "?"}號${fl}樓  rule_score ${c.rule_score}\n` + c.rule_hits.map(h => `${h.rule_code} ${h.effect ?? ""} ${h.detail || RULES[h.rule_code] || ""}`).join("\n");
+      return `<td class="cell ${isConf ? "conf" : ""} ${c.rule_score === topScore ? "top" : ""}" style="${isConf ? "" : `background:rgba(var(--heat),${alpha.toFixed(2)})`}" title="${esc(tip)}">${c.rule_score.toFixed(2)}</td>`;
+    }).join("")}</tr>`).join("");
+  const sorted = live.slice().sort((x, y) => y.rule_score - x.rule_score);
+  const ties = sorted.filter(c => c.rule_score === (sorted[0] || {}).rule_score).length;
+  const ranked = sorted.slice(0, ties > 2 ? 2 : 6);
+  const fieldBox = (k, t) => { const v = f[k] || {}; const val = v.value ?? (v.status === "AMBIGUOUS" ? "多個可能" : "—");
+    return `<div class="field"><span>${t}</span><b>${esc(val)}</b> ${fbadge(v.status)}${v.basis ? ` <span class="note">${v.basis === "HUMAN_REVIEW" ? "人工佐證" : "名冊規則"}</span>` : ""}</div>`; };
+  $("#detail").innerHTML = `
+    <div class="card"><h2>#${d.id} ${esc(d.source_code)} <span class="mono">${esc(d.external_id)}</span> ${badge(d.status)}</h2>
+      <div>${esc(s.title || "")}</div>
+      <div class="note">${[fmtPrice(s.total_price), `${s.building_ping ?? "?"} 坪（車位 ${s.parking_ping ?? "?"} 坪，${s.parking_included === "INCLUDED" ? "坪數含車位" : s.parking_included === "EXCLUDED" ? "坪數不含車位" : "車位口徑不明"}）`,
+        s.floor_text || "樓層未揭露", `${s.rooms ?? "?"} 房`, s.orientation].filter(Boolean).map(esc).join("｜")}
+      ${d.url ? `<br><span class="mono">${esc(d.url)}</span>` : ""}</div>
+      <h3>① 社區歸屬 ${badge(m?.outcome)} <span class="note">rule_score ${m?.rule_score ?? "—"}，依據 ${esc(m?.basis)}</span></h3>
+      <ul class="hits">${(m?.rule_hits || []).map(h => `<li><b>${h.rule_code}</b> ${RULES[h.rule_code] || ""} <span class="${(h.effect ?? 0) < 0 ? "neg" : "pos"}">${h.effect ?? (h.decisive ? "決定性" : "")}</span> <span class="note">${esc(h.detail || "")}</span></li>`).join("")}</ul>
+      ${(m?.flags || []).length ? `<div class="note">旗標：${m.flags.join("、")}</div>` : ""}
+      <h3>② 戶別與完整門牌 ${badge(a?.outcome)} <span class="note">候選 ${a?.candidate_count ?? 0} 個${(a?.flags || []).length ? "，旗標 " + a.flags.join("、") : ""}</span></h3>
+      <div class="fields">${fieldBox("building", "棟別")}${fieldBox("sales_unit", "戶別")}${fieldBox("floor", "樓層")}${fieldBox("full_address", "完整門牌")}</div>
+      <h3>戶別 × 樓層候選（顏色越深分數越高；框線＝目前最高分；斜線＝已排除；虛線＝不在候選）</h3>
+      <div class="scroll"><table class="grid"><thead><tr><th></th>${head}</tr></thead><tbody>${grid}</tbody></table></div>
+      <div class="legend"><span><i style="background:rgba(var(--heat),.85)"></i>高分</span><span><i style="background:rgba(var(--heat),.2)"></i>低分</span><span><i style="background:var(--good)"></i>已確認</span><span>游標停在格子上可看規則依據</span></div>
+      <h3>前幾名候選的依據</h3>
+      ${ranked.map(c => { const w = REG.dw[c.dwelling_id] || {}; return `<div><b>${w.code} ${w.floor}F → 高鐵南路一段${w.number ?? "?"}號${w.floor}樓</b> <span class="note">rule_score ${c.rule_score}</span>
+        <ul class="hits">${c.rule_hits.map(h => `<li><b>${h.rule_code}</b> ${RULES[h.rule_code] || ""} <span class="${(h.effect ?? 0) < 0 ? "neg" : "pos"}">${h.effect ?? ""}</span> <span class="note">${esc(h.detail || "")}</span></li>`).join("")}</ul></div>`; }).join("") || '<div class="empty">沒有候選</div>'}
+      ${ties > 2 ? `<div class="note">另有 ${ties - 2} 個候選同分（依據相同，差別只在樓層）。</div>` : ""}
+      <h3>③ JEV 判斷（決策模型）</h3><div id="jev-box" class="note">載入中…</div>
+      <h3>④ 同屋群組</h3><div>property #${d.property_id}${(() => { const p = S.data.props.find(x => x.id === d.property_id); return p && p.listing_ids.length > 1 ? `：與刊登 ${p.listing_ids.filter(x => x !== d.id).map(x => "#" + x).join("、")} 為同一戶` : "：目前只有這則刊登"; })()}</div>
+      <h3>價格歷史</h3><div id="price-hist" class="note">載入中…</div>
+      <h3>刊登週期</h3><div class="note">${d.cycles.map(c => `第 ${c.cycle_no} 次：${c.started_at.slice(0, 10)}（${c.start_reason}）→ ${c.ended_at ? c.ended_at.slice(0, 10) + "（" + c.end_reason + "）" : "上架中"}`).join("<br>")}</div>
+      ${d.status === "ACTIVE" ? `<div class="row"><button class="danger" id="delist">標記已下架…</button></div>` : ""}
+    </div>`;
+  renderJev(id);
+  api("GET", `/listings/${id}/snapshots`).then(r => {
+    let prev = null;
+    $("#price-hist").innerHTML = r.items.map(x => { const d = prev == null ? "" : x.total_price - prev; prev = x.total_price;
+      return `<div>${x.observed_at.slice(0, 10)}　${fmtPrice(x.total_price)} ${d ? `<span class="${d < 0 ? "pos" : "neg"}">${d < 0 ? "▼" : "▲"} ${fmtPrice(Math.abs(d))}（${(d / (x.total_price - d) * 100).toFixed(1)}%）</span>` : ""}
+        <span class="note">${esc(x.floor_text || "")}</span></div>`; }).join("") || "沒有觀測紀錄";
+  }).catch(e => { $("#price-hist").textContent = e.message; });
+  const dl = $("#delist");
+  if (dl) dl.onclick = async () => {
+    dl.outerHTML = `<div class="form"><select id="dlr"><option value="MARKED_SOLD">平台顯示已成交</option><option value="MARKED_REMOVED">平台顯示已下架</option><option value="MANUAL">人工判定</option></select>
+      <input id="dlt" placeholder="理由（至少 5 個字）"><div class="row"><button class="primary" id="dlgo">確認下架</button></div></div>`;
+    $("#dlgo").onclick = async () => {
+      try { await api("POST", `/listings/${id}:mark-delisted`, {reason: $("#dlr").value, rationale: $("#dlt").value}, {"If-Match": `"v${d.version}"`});
+        toast("已標記下架，並產生 LISTING_DELISTED 事件"); await refresh(); } catch (e) { toast(e.message); } };
+  };
+}
+
+// ---------------- JEV 判斷
+const QLABEL = {candidate_photo: "照片比較像哪一戶（候選窮舉）", layout_front_row: "窗景是否面對高鐵南路（前排／後排）", layout_kitchen_left: "廚房在客廳窗的左側或右側（左右鏡像）", floor_band: "從窗景判斷樓層高低", membership_text: "文字描述是否就是聯上世界"};
+function shrink(file, max = 1024) {  // 在瀏覽器裡縮小照片再送出（減少費用；原檔不會上傳到 JEV 以外的地方）
+  return new Promise((ok, bad) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.85)); };
+    img.onerror = () => bad(new Error("無法讀取圖片"));
+    img.src = url; });
+}
+function describeAnswer(v) {
+  if (v.type === "noul") return `機率 ${(v.answer * 100).toFixed(0)}%<div class="bar"><i style="width:${(v.answer * 100).toFixed(0)}%"></i></div>`;
+  if (v.type === "score") { const labels = ["低樓層", "中樓層", "高樓層"]; return Object.entries(v.probabilities || {}).map(([k, x]) =>
+    `${labels[+k] || k} ${(x * 100).toFixed(0)}%<div class="bar"><i style="width:${(x * 100).toFixed(0)}%"></i></div>`).join(""); }
+  if (v.type === "choice") return Object.entries(v.probabilities || {}).sort((a, b) => b[1] - a[1]).map(([k, x]) =>
+    `${esc(k)} ${(x * 100).toFixed(0)}%<div class="bar"><i style="width:${(x * 100).toFixed(0)}%"></i></div>`).join("");
+  return esc(JSON.stringify(v.answer));
+}
+async function renderJev(id) {
+  const box = $("#jev-box");
+  let d;
+  try { d = await api("GET", `/listings/${id}/decisions`); } catch (e) { box.textContent = e.message; return; }
+  const st = d.status;
+  const head = st.enabled
+    ? `<span class="badge b-good">已啟用</span> ${esc(st.provider)} · ${esc(st.model || "")}｜本月 US$${st.month_spend_usd.toFixed(4)}${st.monthly_budget_usd != null ? " / " + st.monthly_budget_usd : ""}｜文字${st.allow_text ? "可" : "不可"}、圖片${st.allow_images ? "可" : "不可"}外送`
+    : `<span class="badge b-muted">未啟用</span> ${esc(st.problems.join("；") || "在 .env 設定 JEV_DECISION_PROVIDER 並允許文字或圖片外送，重新啟動伺服器")}`;
+  const sugg = d.suggestions.filter(x => x.question);
+  const why = d.suggestions.filter(x => !x.question);
+  const answers = d.answers.filter(e => e.status === "ACTIVE" && e.field !== "listing_photo");
+  box.innerHTML = `<div>${head}</div>
+    ${answers.length ? answers.map(e => `<div class="ans"><b>${esc(QLABEL[e.value.question] || e.value.question)}</b>
+      <span class="note">${esc(e.value.provider)}:${esc(e.value.model)}・${e.observed_at.slice(0, 16).replace("T", " ")}</span>
+      ${describeAnswer(e.value)}<div class="row"><button data-retract="${e.id}" data-v="${e.version}">撤回這個答案</button></div></div>`).join("") : ""}
+    ${sugg.length ? `<div style="margin-top:6px">建議提問：</div>${sugg.map(x => `<label style="display:block"><input type="checkbox" class="jq" value="${x.question}" checked>
+      ${esc(QLABEL[x.question])} <span class="note">— ${esc(x.why)}</span></label>`).join("")}` : '<div class="note">這則刊登目前沒有適合交給模型的題目。</div>'}
+    ${why.map(x => `<div class="note">・${esc(x.why)}</div>`).join("")}
+    ${sugg.length && !st.enabled ? `<div class="note" style="margin-top:6px">要使用這些題目：在 .env 設定 JEV_DECISION_PROVIDER（openai／openrouter／typesafe）、金鑰，
+      並允許文字或圖片外送，然後重新啟動伺服器（見使用手冊 §5）。</div>` : ""}
+    ${sugg.length && st.enabled && (S.photoUrls[id] || []).length ? `<div class="form"><div>從匯入帶來的 591 照片（${S.photoUrls[id].length} 張；送出時由 JEV 下載，不保存）：</div>
+      <div class="thumbs">${S.photoUrls[id].map(u => `<img src="${esc(u)}" alt="刊登照片" referrerpolicy="no-referrer">`).join("")}</div>
+      <button id="jclear">不用這些照片</button></div>` : ""}
+    ${sugg.length && st.enabled ? `<div class="form"><label>刊登照片（窗景、客廳；最多 4 張，送出前在瀏覽器縮小）<input type="file" id="jf" accept="image/*" multiple></label>
+      <div class="thumbs" id="jt"></div>
+      <label><input type="checkbox" id="jc"> 我同意把這則刊登的房屋欄位${st.allow_images ? "與上面的照片" : ""}送到 ${esc(st.provider)}（${esc(st.model || "")}）；照片不會存進 JEV，只記錄雜湊</label>
+      <div class="row"><button class="primary" id="jgo" ${st.enabled ? "" : "disabled"}>請 JEV 判斷</button>
+      <span class="note">答案只會調整候選的排序（最多 ±0.3），不會刪除候選，也不會確認門牌。</span></div></div>` : ""}`;
+  let imgs = [];
+  const jf = $("#jf");
+  if (jf) jf.onchange = async () => {
+    imgs = [];
+    for (const f of [...jf.files].slice(0, 4)) { try { imgs.push(await shrink(f)); } catch (e) { toast(e.message); } }
+    $("#jt").innerHTML = imgs.map(u => `<img src="${u}" alt="照片預覽">`).join("");
+  };
+  const go = $("#jgo");
+  if (go) go.onclick = async () => {
+    const purposes = [...document.querySelectorAll(".jq:checked")].map(x => x.value);
+    if (!$("#jc").checked) { toast("請先勾選同意"); return; }
+    go.disabled = true; go.textContent = "判斷中…";
+    try {
+      const r = await api("POST", `/listings/${id}/decisions`, {purposes, images: imgs, photo_urls: S.photoUrls[id] || [], consent: true});
+      const kinds = {interior_view: "室內有窗景", interior: "室內無窗景", common: "大廳公設", exterior: "外觀", plan: "平面圖", other: "其他"};
+      const scr = (r.screened || []).map(x => kinds[x.kind] || x.kind).join("、");
+      toast(`JEV 已回答 ${Object.keys(r.answers).length} 題（用了 ${r.photos_used} 張照片${scr ? "；照片分類：" + scr : ""}）；門牌判定：${(OUTCOME[r.address_outcome] || [r.address_outcome])[0]}`);
+      await refresh();
+    } catch (e) { toast(e.message); go.disabled = false; go.textContent = "請 JEV 判斷"; }
+  };
+  const jc = $("#jclear");
+  if (jc) jc.onclick = () => { delete S.photoUrls[id]; savePhotoUrls(); renderJev(id); };
+  box.querySelectorAll("[data-retract]").forEach(b => b.onclick = async () => {
+    try { await api("POST", `/evidence/${b.dataset.retract}:retract`, {rationale: "使用者撤回模型答案"}, {"If-Match": `"v${b.dataset.v}"`});
+      toast("已撤回，分數回到原本的規則判斷"); await refresh(); } catch (e) { toast(e.message); }
+  });
+}
+
+// ---------------- 覆核
+function viewReview() {
+  const all = S.showAll ? S.data.tasks : S.data.tasks.filter(t => t.priority < 5);
+  const hidden = S.data.tasks.length - S.data.tasks.filter(t => t.priority < 5).length;
+  $("#view").innerHTML = `<div class="card"><h2>待覆核任務</h2><p class="note">確認門牌需要「直接門牌證據」＋「與這則刊登的連結證據」（H1、H2）；只有地址文字或照片格局不夠，系統會回報缺哪一項。排除候選、無法判斷都會保留紀錄，同樣內容不會重複詢問。</p>
+    <label class="note"><input type="checkbox" id="all" ${S.showAll ? "checked" : ""}> 也顯示名冊覆核任務（${hidden} 件，P5）</label></div>
+    <div id="tasks">${all.map(taskCard).join("") || '<div class="card empty">沒有待覆核任務</div>'}</div>`;
+  $("#all").onchange = e => { S.showAll = e.target.checked; viewReview(); };
+  document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(b));
+}
+function listingLabel(id) { const l = S.data.listings.find(x => x.id === id); return esc(l ? `#${id} ${l.source_code.replace("SRC-", "")} ${l.external_id}` : `#${id}`); }
+function taskCard(t) {
+  const a = t.assessment;
+  let body = "", acts = "";
+  if (t.task_type === "ADDRESS_CANDIDATE") {
+    const top = (a.candidates || []).slice().sort((x, y) => y.rule_score - x.rule_score).slice(0, 4);
+    body = `<div>${listingLabel(t.listing_id)} ${badge(a.outcome)}</div><table><tbody>${top.map(c => { const w = REG.dw[c.dwelling_id] || {};
+      return `<tr><td>${w.code} ${w.floor}F</td><td>高鐵南路一段${w.number ?? "?"}號${w.floor}樓</td><td class="num">${c.rule_score}</td>
+      <td><button data-act="REJECT_CANDIDATE" data-t="${t.id}" data-c="${c.candidate_id}">排除此候選</button>
+      <button data-act="confirm-form" data-t="${t.id}" data-c="${c.candidate_id}" data-addr="高鐵南路一段${w.number}號${w.floor}樓">以現場佐證確認…</button></td></tr>`; }).join("")}</tbody></table>`;
+    acts = `<button data-act="ABSTAIN" data-t="${t.id}">無法判斷</button><button data-act="MARK_INSUFFICIENT" data-t="${t.id}">資料不足</button>`;
+  } else if (t.task_type === "COMMUNITY_MEMBERSHIP") {
+    body = `<div>${listingLabel(t.listing_id)} ${badge(a.outcome)} rule_score ${a.rule_score}</div>`;
+    acts = `<button data-act="evid-form" data-d="CONFIRM_MEMBER" data-t="${t.id}">屬於聯上世界（附佐證）…</button><button data-act="evid-form" data-d="CONFIRM_NON_MEMBER" data-t="${t.id}">不屬於（附佐證）…</button><button data-act="ABSTAIN" data-t="${t.id}">無法判斷</button>`;
+  } else if (t.task_type === "LISTING_MATCH") {
+    const m = t.identity_match;
+    body = `<div>${listingLabel(m.listing_a_id)} ↔ ${listingLabel(m.listing_b_id)} ${badge(a.outcome)} rule_score ${a.rule_score}</div>
+      <ul class="hits">${(a.rule_hits || []).map(h => `<li><b>${h.rule_code}</b> ${esc(h.detail || "")} <span class="${(h.effect ?? 0) < 0 ? "neg" : "pos"}">${h.effect ?? ""}</span></li>`).join("")}</ul>`;
+    acts = `<button data-act="evid-form" data-d="CONFIRM_SAME" data-t="${t.id}">是同一戶（附佐證）…</button><button data-act="REJECT_SAME" data-t="${t.id}">不同戶</button><button data-act="ABSTAIN" data-t="${t.id}">無法判斷</button><button data-act="jev-pair" data-t="${t.id}" data-m="${m.id}">請 JEV 判斷…</button>`;
+  } else if (t.task_type === "REGISTRY_MAPPING") {
+    const su = REG.su[t.mapping.from_id];
+    body = `<div>戶別 <b>${su?.code}</b> → 高鐵南路一段 <b>${REG.num[t.mapping.from_id] ?? "?"}</b> 號 <span class="badge b-warn">${t.mapping.record_status}</span></div>`;
+    acts = `<button data-act="evid-form" data-d="VERIFY_MAPPING" data-t="${t.id}">核對正確（附佐證）…</button><button data-act="REJECT_MAPPING" data-t="${t.id}">對照錯誤</button>`;
+  } else {
+    body = `<div>推導規則 #${t.rule.id}：${t.rule.scope_type}，${t.rule.floor_min}–${t.rule.floor_max} 樓 <span class="badge b-warn">${t.rule.record_status}</span></div>`;
+    acts = `<button data-act="evid-form" data-d="VERIFY_RULE" data-t="${t.id}">規則正確（附佐證）…</button><button data-act="REJECT_RULE" data-t="${t.id}">規則錯誤</button>`;
+  }
+  return `<div class="task" id="task-${t.id}"><header><b>任務 #${t.id}</b><span class="badge b-info">${t.task_type}</span><span class="note">P${t.priority} · v${t.version}</span></header>
+    ${body}<div class="row">${acts}</div><div class="slot"></div></div>`;
+}
+const CAP = m => ({captured_by: "user", captured_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"), method: m});
+async function decide(tid, payload) {
+  const t = S.data.tasks.find(x => x.id === tid);
+  try {
+    const r = await api("POST", `/review-tasks/${tid}/decisions`, payload, {"If-Match": `"v${t.version}"`});
+    const sa = r.support_assessment || {};
+    toast(sa.result === "INSUFFICIENT" ? `已記錄，但佐證不足：缺 ${sa.unmet_conditions.join("、")}（任務維持開啟）` : `已送出：${payload.decision}${sa.confirmed_fields?.length ? "；確認欄位 " + sa.confirmed_fields.join("、") : ""}`);
+    await refresh();
+  } catch (e) { toast(e.message); }
+}
+function act(b) {
+  const tid = +b.dataset.t, slot = $(`#task-${tid} .slot`), d = b.dataset.act;
+  if (d === "jev-pair") {
+    slot.innerHTML = `<div class="form"><label><input type="checkbox" id="pc"> 我同意把兩則刊登的房屋欄位送到外部決策模型（不含照片與個人資料）</label>
+      <div class="row"><button class="primary" id="pgo">送出</button><span class="note">答案只調整配對分數（P9m），不會自動合併。</span></div></div>`;
+    $("#pgo").onclick = async () => {
+      if (!$("#pc").checked) { toast("請先勾選同意"); return; }
+      try { const r = await api("POST", `/identity-matches/${b.dataset.m}/decisions`, {consent: true});
+        const p = r.answers.same_dwelling ? r.answers.same_dwelling.value : null;
+        toast(`JEV：同一戶的機率 ${p == null ? "—" : (p * 100).toFixed(0) + "%"}；配對分數 ${r.match_score}`); await refresh();
+      } catch (e) { toast(e.message); } };
+    return;
+  }
+  if (d === "confirm-form") {
+    slot.innerHTML = `<div class="form"><div class="note">候選：${esc(b.dataset.addr)}。請描述你實際看到的證據（不上傳照片，只存描述）。</div>
+      <input id="f-addr" value="${esc(b.dataset.addr)}" aria-label="看到的門牌">
+      <input id="f-photo" placeholder="直接門牌證據，例如：帶看時拍到門牌 79 號 12 樓">
+      <select id="f-link"><option value="AGENT_VIEWING_WITH_LISTING_REF">帶看仲介出示此刊登編號（強連結）</option><option value="DOCUMENT_CITES_LISTING">文件同時載明刊登編號與門牌（強連結）</option><option value="INTERIOR_FEATURE_MATCH">室內特徵與刊登照片一致（強連結）</option><option value="OTHER">其他（感覺很像，不算強連結）</option></select>
+      <input id="f-why" placeholder="理由（至少 5 個字）"><div class="row"><button class="primary" id="f-go">送出確認</button></div></div>`;
+    $("#f-go").onclick = () => decide(tid, {decision: "CONFIRM_CANDIDATE", candidate_id: +b.dataset.c, rationale: $("#f-why").value, new_evidence: [
+      {field: "full_address", value: {address_text: $("#f-addr").value}, description: $("#f-photo").value || "（未填）", observed_at: CAP("PHOTO").captured_at,
+       evidence_role: "DIRECT_ADDRESS", derivation_type: "ORIGINAL", capture: CAP("PHOTO")},
+      {field: "listing_identity", value: {listing_ref_seen: "現場"}, description: "與此刊登的連結：" + $("#f-link").selectedOptions[0].text, observed_at: CAP("SITE_VISIT_NOTE").captured_at,
+       evidence_role: "LISTING_LINKAGE", derivation_type: "ORIGINAL", link_method: $("#f-link").value, capture: CAP("SITE_VISIT_NOTE"),
+       matched_features: ["窗景", "格局"]}]});
+    return;
+  }
+  if (d === "evid-form") {
+    slot.innerHTML = `<div class="form"><input id="e-desc" placeholder="佐證描述（至少 5 個字），例如：兩則刊登使用同一組室內照片"><input id="e-why" placeholder="理由（至少 5 個字）">
+      <div class="row"><button class="primary" id="e-go">送出 ${b.dataset.d}</button></div></div>`;
+    $("#e-go").onclick = () => decide(tid, {decision: b.dataset.d, rationale: $("#e-why").value, new_evidence: [
+      {field: "review_support", value: {note: $("#e-desc").value}, description: $("#e-desc").value, observed_at: CAP("OTHER").captured_at,
+       evidence_role: "OTHER", derivation_type: "ORIGINAL", capture: CAP("OTHER")}]});
+    return;
+  }
+  slot.innerHTML = `<div class="form"><input id="r-why" placeholder="理由（至少 5 個字）"><div class="row"><button class="primary" id="r-go">送出 ${d}</button></div></div>`;
+  $("#r-go").onclick = () => decide(tid, {decision: d, rationale: $("#r-why").value, ...(b.dataset.c ? {candidate_id: +b.dataset.c} : {})});
+}
+
+// ---------------- 同屋群組
+function viewProps() {
+  const P = S.data.props.slice().sort((a, b) => b.listing_ids.length - a.listing_ids.length || a.id - b.id);
+  $("#view").innerHTML = `<div class="card"><h2>同屋群組（property）</h2><p class="note">不同刊登被判定為同一戶後才會合併；系統不會只因坪數、樓層相同就自動合併（不同仲介不自動視為獨立來源）。合併、拆分、撤回都有紀錄，已發出的新案通知若群組改變會發更正通知。</p>
+    <div class="scroll"><table><thead><tr><th>群組</th><th>狀態</th><th>刊登</th><th>上架中</th><th>最低價</th><th>首次出現</th></tr></thead><tbody>
+    ${P.map(p => `<tr><td>#${p.id}</td><td>${badge(p.status)}</td><td>${p.listing_ids.map(listingLabel).join("<br>")}</td><td class="num">${p.active_listing_count}</td><td class="num">${fmtPrice(p.current_min_price)}</td><td>${p.first_seen_at.slice(0, 10)}</td></tr>`).join("")}
+    </tbody></table></div></div>`;
+}
+
+// ---------------- 事件與通知
+const EV = {LISTING_FIRST_OBSERVED:"首次觀測", LISTING_NEW_CONFIRMED:"新刊登", LISTING_PRICE_CHANGED:"價格變動", LISTING_FIELDS_CHANGED:"欄位變動", LISTING_DELISTED:"下架", LISTING_RELISTED:"重新上架",
+  DWELLING_NEW_LISTING:"同屋出現新刊登", PROPERTY_MERGED:"合併", PROPERTY_SPLIT:"拆分", MERGE_REVERTED:"撤回合併", COMMUNITY_MEMBERSHIP_CHANGED:"社區歸屬變更", ADDRESS_ASSESSMENT_CHANGED:"門牌判定變更", REGISTRY_UPDATED:"名冊更新", SOURCE_HEALTH_CHANGED:"來源狀態"};
+const SUPPRESS = {MANUAL_INITIAL_CONTEXT: "初始化資料，不當成新刊登", BASELINE_CONTEXT: "基準輪次", INTERNAL_EVENT: "內部事件"};
+function viewEvents() {
+  const E = S.data.events.slice().reverse(), N = S.data.notes.slice().reverse();
+  const hideNoise = S.hideNoise !== false;
+  const shown = hideNoise ? E.filter(e => !["ADDRESS_ASSESSMENT_CHANGED", "COMMUNITY_MEMBERSHIP_CHANGED"].includes(e.event_type)) : E;
+  $("#view").innerHTML = `<div class="layout"><div class="card"><h2>事件（全部保存）</h2>
+    <label class="note"><input type="checkbox" id="noise" ${hideNoise ? "checked" : ""}> 隱藏判定變更類內部事件</label>
+    <ul class="tl">${shown.map(e => `<li><span class="note">${e.occurred_at.replace("T", " ").slice(0, 16)}</span>
+      <span>${e.notify_eligible ? '<span class="badge b-good">可通知</span>' : `<span class="badge b-muted" title="${esc(e.suppression_reason)}">不通知</span>`} ${EV[e.event_type] || e.event_type}</span>
+      <span>${e.subject.listing_id ? listingLabel(e.subject.listing_id) : ""} ${e.event_type === "LISTING_PRICE_CHANGED" ? `${fmtPrice(e.payload.old_price)} → ${fmtPrice(e.payload.new_price)}` : ""} <span class="note">${esc(SUPPRESS[e.suppression_reason] || e.suppression_reason || "")}</span></span></li>`).join("")}</ul></div>
+    <div class="card"><h2>通知規則</h2><div id="rules">載入中…</div>
+      <div class="row"><button id="rule-new">新增規則</button><button id="export">匯出同屋群組 CSV</button></div></div>
+    <div class="card"><h2>通知</h2><p class="note">尚未選定通知管道（Q-005）：沒有設定 SMTP 或 Telegram 時寫入本機 outbox 資料夾，狀態為 PENDING。</p>
+    ${N.map(n => `<div class="task"><header><b>${esc(n.rendered.subject || "")}</b><span class="badge ${n.notification_kind === "CORRECTION" ? "b-warn" : "b-info"}">${n.notification_kind}</span><span class="note">${n.status}</span></header>
+      <div style="white-space:pre-wrap">${esc(n.rendered.text || "")}</div>${n.corrects_notification_id ? `<div class="note">更正通知 #${n.corrects_notification_id}</div>` : ""}</div>`).join("") || '<div class="empty">還沒有通知（初始化匯入不會發通知）</div>'}</div></div>`;
+  $("#noise").onchange = e => { S.hideNoise = e.target.checked; viewEvents(); };
+  renderRules();
+  $("#export").onclick = async () => {  // 沙盒內無法直接下載：改成開新分頁顯示 CSV，可另存
+    try { const r = await fetch("/api/v1/properties:export", {headers: {"X-API-Key": KEY}}); const t = await r.text();
+      const w = window.open("", "_blank"); if (w) { w.document.write(`<pre>${esc(t)}</pre>`); } else toast("瀏覽器擋下新分頁；改用 CLI：python -m jev report"); }
+    catch (e) { toast(e.message); } };
+  $("#rule-new").onclick = () => editRule(null);
+}
+const EVOPTS = ["LISTING_NEW_CONFIRMED", "DWELLING_NEW_LISTING", "LISTING_PRICE_CHANGED", "LISTING_FIELDS_CHANGED", "LISTING_DELISTED", "LISTING_RELISTED"];
+async function renderRules() {
+  const rules = await api("GET", "/alert-rules");
+  S.rules = rules;
+  $("#rules").innerHTML = rules.map(r => `<div class="ans"><b>${esc(r.name)}</b> ${r.enabled ? '<span class="badge b-good">啟用</span>' : '<span class="badge b-muted">停用</span>'}
+    <span class="note">${r.channel}｜${r.event_types.map(t => EV[t] || t).join("、")}</span>
+    <div class="note">${[r.max_total_price && `總價 ≤ ${fmtPrice(r.max_total_price)}`, r.min_price_drop_pct && `降幅 ≥ ${r.min_price_drop_pct}%`,
+      r.min_rooms && `≥ ${r.min_rooms} 房`, r.min_building_ping && `≥ ${r.min_building_ping} 坪`].filter(Boolean).join("・") || "沒有門檻"}</div>
+    <div class="row"><button data-rule="${r.id}">修改</button><button data-toggle="${r.id}">${r.enabled ? "停用" : "啟用"}</button><button class="danger" data-del="${r.id}">刪除</button></div></div>`).join("")
+    || '<div class="empty">沒有規則</div>';
+  const find = id => S.rules.find(x => x.id === +id);
+  document.querySelectorAll("[data-rule]").forEach(b => b.onclick = () => editRule(find(b.dataset.rule)));
+  document.querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => { const r = find(b.dataset.toggle);
+    try { await api("PATCH", `/alert-rules/${r.id}`, {enabled: !r.enabled}, {"If-Match": `"v${r.version}"`}); renderRules(); } catch (e) { toast(e.message); } });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { const r = find(b.dataset.del);
+    if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "再按一次確認刪除"; return; }
+    try { await api("DELETE", `/alert-rules/${r.id}`, undefined, {"If-Match": `"v${r.version}"`}); toast("已刪除（歷史通知保留）"); renderRules(); } catch (e) { toast(e.message); } });
+}
+function editRule(r) {
+  const v = r || {name: "", event_types: ["LISTING_PRICE_CHANGED"], channel: "EMAIL"};
+  $("#rules").insertAdjacentHTML("afterbegin", `<div class="form" id="rule-form"><input id="rf-name" placeholder="規則名稱" value="${esc(v.name)}">
+    <div>${EVOPTS.map(t => `<label style="margin-right:10px"><input type="checkbox" class="rf-ev" value="${t}" ${v.event_types.includes(t) ? "checked" : ""}> ${EV[t]}</label>`).join("")}</div>
+    <div class="fields"><label class="field"><span>總價上限（萬）</span><input id="rf-max" value="${v.max_total_price ? v.max_total_price / 10000 : ""}"></label>
+      <label class="field"><span>降幅至少（%）</span><input id="rf-drop" value="${v.min_price_drop_pct ?? ""}"></label>
+      <label class="field"><span>至少幾房</span><input id="rf-rooms" value="${v.min_rooms ?? ""}"></label>
+      <label class="field"><span>至少幾坪（權狀）</span><input id="rf-ping" value="${v.min_building_ping ?? ""}"></label>
+      <label class="field"><span>管道</span><select id="rf-ch"><option ${v.channel === "EMAIL" ? "selected" : ""}>EMAIL</option><option ${v.channel === "TELEGRAM" ? "selected" : ""}>TELEGRAM</option></select></label></div>
+    <div class="row"><button class="primary" id="rf-save">儲存</button><button id="rf-cancel">取消</button></div></div>`);
+  const num = (id, k = 1) => { const x = $(id).value.trim(); return x === "" ? null : Number(x) * k; };
+  $("#rf-cancel").onclick = () => $("#rule-form").remove();
+  $("#rf-save").onclick = async () => {
+    const body = {name: $("#rf-name").value.trim(), event_types: [...document.querySelectorAll(".rf-ev:checked")].map(x => x.value), channel: $("#rf-ch").value,
+      max_total_price: num("#rf-max", 10000) == null ? null : Math.round(num("#rf-max", 10000)), min_price_drop_pct: num("#rf-drop"),
+      min_rooms: num("#rf-rooms") == null ? null : Math.round(num("#rf-rooms")), min_building_ping: num("#rf-ping")};
+    try { if (r) await api("PATCH", `/alert-rules/${r.id}`, body, {"If-Match": `"v${r.version}"`});
+      else await api("POST", "/alert-rules", Object.fromEntries(Object.entries(body).filter(([, x]) => x !== null)));
+      toast("已儲存"); renderRules(); } catch (e) { toast(e.message); } };
+}
+
+// ---------------- 名冊
+async function viewRegistry() {
+  const rules = await api("GET", "/registry/derivation-rules");
+  const st = s => `<span class="badge ${s === "VERIFIED" ? "b-good" : s === "RETRACTED" ? "b-bad" : "b-warn"}">${s}</span>`;
+  $("#view").innerHTML = `<div class="layout"><div class="card"><h2>戶別 → 門牌號</h2><p class="note">來源：樂居門牌示意圖與 591 平面圖轉錄（17 組，原圖已核對，但沒有獨立佐證）。核對正確後到「覆核」驗證，系統才可能自行確認門牌（K1–K5）。</p>
+    <div class="scroll"><table><thead><tr><th>戶別</th><th>號</th><th>立面</th><th>狀態</th></tr></thead><tbody>
+    ${REG.units.map(u => `<tr><td>${u.code}</td><td>${REG.num[u.id] ?? "?"}</td><td>${esc(u.orientation || "")}</td><td>${st(REG.mstat[u.id])}</td></tr>`).join("")}</tbody></table></div></div>
+    <div class="card"><h2>門牌推導規則</h2><table><thead><tr><th>#</th><th>範圍</th><th>樓層</th><th>狀態</th></tr></thead><tbody>
+    ${rules.map(r => `<tr><td>${r.id}</td><td>${r.scope_type}${r.scope_ids.length ? `（${r.scope_ids.length} 戶）` : ""}</td><td>${r.floor_min}–${r.floor_max}</td><td>${st(r.record_status)}</td></tr>`).join("")}</tbody></table>
+    <p class="note">樓層不依總樓高推定；2F 前排 6 戶不存在（2F 平面圖）。</p></div></div>`;
+}
+
+// ---------------- 匯入（591 書籤或手動）
+const IMP_FIELDS = [
+  ["external_id", "591 刊登編號", "text"], ["url", "網址", "text"], ["title", "標題", "text"], ["total_price", "總價（元）", "int"],
+  ["building_ping", "權狀坪數", "num"], ["parking_ping", "車位坪數", "num"], ["main_ping", "主建物坪數", "num"],
+  ["parking_included", "坪數是否含車位", "sel:INCLUDED,EXCLUDED,UNKNOWN"], ["floor_text", "樓層（例如 9樓/14樓）", "text"],
+  ["rooms", "房", "int"], ["halls", "廳", "int"], ["baths", "衛", "int"], ["orientation", "朝向／落地窗", "text"], ["age_years", "屋齡", "num"],
+  ["units_per_floor", "該層戶數", "int"], ["sales_unit_text", "明寫戶別（例如 A2）", "text"],
+  ["community_text", "社區", "text"], ["platform_community_ref", "591 社區編號", "text"], ["address_text", "地址", "text"],
+  ["lister_type", "刊登者", "sel:AGENT,OWNER,UNKNOWN"], ["lister_company", "仲介公司（只記公司）", "text"]];
+const SNAP_KEYS = ["total_price", "parking_included", "building_ping", "main_ping", "parking_ping", "floor_text", "rooms", "halls", "baths",
+  "orientation", "age_years", "address_text", "community_text", "platform_community_ref", "sales_unit_text", "units_per_floor", "title"];
+function viewImport() {
+  const r = (S.imp && S.imp.record) || {source_code: "SRC-591", parking_included: "INCLUDED", lister_type: "AGENT"};
+  const warns = (S.imp && S.imp.warnings) || [];
+  const exist = r.external_id && S.data.listings.find(l => l.source_code === "SRC-591" && l.external_id === String(r.external_id));
+  const input = ([k, label, t]) => {
+    const v = r[k] ?? "";
+    const ctl = t.startsWith("sel:") ? `<select data-k="${k}">${t.slice(4).split(",").map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`
+      : `<input data-k="${k}" data-t="${t}" value="${esc(v)}" ${t === "text" ? "" : 'inputmode="decimal"'} style="width:100%">`;
+    return `<label class="field"><span>${label}</span>${ctl}</label>`;
+  };
+  $("#view").innerHTML = `<div class="card"><h2>匯入一則 591 刊登</h2>
+    ${S.impErr ? `<p class="mono">書籤資料無法解析：${esc(S.impErr)}</p>` : ""}
+    ${S.imp ? `<p class="note">以下欄位由「591 → JEV」書籤從你畫面上的頁面讀出。<b>請核對後才寫入</b>；有誤直接修改。</p>` : `<p class="note">沒有書籤資料：可以手動填寫，或到 <a href="/tools">591 匯入工具</a> 安裝書籤。</p>`}
+    ${warns.map(w => `<div class="badge b-warn" style="margin:2px 0">${esc(w)}</div>`).join("<br>")}
+    ${exist ? `<p><span class="badge b-info">已存在</span> 刊登 #${exist.id}：寫入會記成一筆新觀測（價格或欄位有變才會產生事件）。</p>`
+            : `<p><span class="badge b-good">新刊登</span> 寫入後會建立新的刊登並評估社區歸屬與門牌候選。</p>`}
+    <div class="fields">${IMP_FIELDS.map(input).join("")}</div>
+    ${(S.imp && S.imp.photos || []).length ? `<h3>刊登照片（勾選要給 JEV 判斷的，最多 6 張；不會存進 JEV）</h3>
+      <div class="note">建議勾選看得到窗外的室內照片（客廳、臥室）。大廳、外觀、平面圖 JEV 會自動略過。</div>
+      <div class="thumbs" id="imp-photos">${S.imp.photos.map((u, i) => `<label class="pick"><input type="checkbox" value="${esc(u)}"><img src="${esc(u)}" alt="照片 ${i + 1}" loading="lazy" referrerpolicy="no-referrer"></label>`).join("")}</div>` : ""}
+    ${!r.platform_community_ref && /聯上世界/.test(r.community_text || r.title || "") ? `<div class="row"><button id="ref9488">這則掛在 591 的聯上世界社區頁 → 設為 591:9488</button></div>` : ""}
+    ${exist ? "" : `<label class="note" style="display:block;margin-top:8px"><input type="checkbox" id="isnew"> 我確認這是剛上架的新刊登（勾選才會發「新刊登」通知；不確定就不要勾）</label>`}
+    <div class="row"><button class="primary" id="impgo">寫入 JEV</button><button id="impclear">清除</button></div></div>`;
+  document.querySelectorAll("#imp-photos .pick input").forEach(cb => cb.onchange = () => cb.parentElement.classList.toggle("on", cb.checked));
+  const ref = $("#ref9488");
+  if (ref) ref.onclick = () => { document.querySelector('[data-k="platform_community_ref"]').value = "591:9488"; ref.disabled = true; };
+  $("#impclear").onclick = () => { S.imp = null; S.impErr = null; viewImport(); };
+  $("#impgo").onclick = async () => {
+    const v = {};
+    document.querySelectorAll("[data-k]").forEach(el => {
+      const raw = el.value.trim(), t = el.dataset.t;
+      v[el.dataset.k] = raw === "" ? null : t === "int" ? parseInt(raw.replace(/,/g, ""), 10) : t === "num" ? Number(raw) : raw;
+    });
+    if (!v.external_id || !v.total_price) { toast("至少需要 591 刊登編號與總價"); return; }
+    const picked = [...document.querySelectorAll("#imp-photos input:checked")].map(x => x.value);
+    if (picked.length > 6) { toast("照片最多勾選 6 張"); return; }
+    const snap = Object.fromEntries(SNAP_KEYS.filter(k => v[k] != null).map(k => [k, v[k]]));
+    try {
+      let id, msg;
+      const ex = S.data.listings.find(l => l.source_code === "SRC-591" && l.external_id === String(v.external_id));
+      if (ex) {
+        const out = await api("POST", `/listings/${ex.id}/snapshots`, snap);
+        id = ex.id; msg = out.id && out.observed_at ? "已記錄新觀測" : "已記錄";
+      } else {
+        const out = await api("POST", "/listings", {source_code: "SRC-591", external_id: String(v.external_id), url: v.url,
+          lister_type: v.lister_type || "UNKNOWN", lister_company: v.lister_company, import_mode: "INCREMENTAL",
+          is_new_listing: $("#isnew") && $("#isnew").checked ? true : null, snapshot: snap});
+        id = out.id; msg = `已建立刊登 #${id}`;
+      }
+      if (picked.length) { S.photoUrls[id] = picked; savePhotoUrls(); msg += `；已帶入 ${picked.length} 張照片，可在「③ JEV 判斷」使用`; }
+      S.imp = null; toast(msg); S.tab = "listings"; S.sel = id; await refresh();
+    } catch (e) { toast(e.message); }
+  };
+}
+
+$("#reload").onclick = () => { KEY = $("#key").value.trim(); try { localStorage.setItem("jev-key", KEY); } catch (e) {} refresh(); };
+refresh();
+</script>
+</body>
+</html>

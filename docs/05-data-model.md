@@ -33,6 +33,7 @@ erDiagram
     int supersedes_rule_id FK "nullable"
     int version
     datetime created_at
+    json evidence_ids "驗證或撤回時引用的佐證"
   }
   community {
     int id PK
@@ -105,6 +106,7 @@ erDiagram
     int to_id
     string record_status
     int version
+    json evidence_ids "驗證或撤回時引用的佐證"
   }
   registry_version {
     int id PK
@@ -235,6 +237,8 @@ erDiagram
     string community_text "nullable"
     string platform_community_ref "nullable"
     string sales_unit_text "nullable"
+    int units_per_floor "nullable，刊登揭露的該層戶數"
+    string map_address "nullable，地圖定位地址（不觸發 N1）"
     string title "nullable"
     datetime posted_at "nullable"
     string parser_version "nullable"
@@ -491,6 +495,7 @@ erDiagram
     string ruleset_version
     int identity_match_id FK "nullable"
     int reverts_operation_id FK "nullable"
+    json evidence_ids "人工合併與拆分的佐證"
     datetime created_at
   }
   merge_operation_listing {
@@ -512,7 +517,7 @@ erDiagram
 | `access_method` | `PUBLIC_WEB`、`AUTHORIZED_API`、`AUTHORIZED_ACCOUNT`、`MANUAL_ONLY`、`NOT_ALLOWED` |
 | `rights.*` | `ALLOWED`、`RESTRICTED`、`PROHIBITED`、`UNKNOWN` |
 | `doc_kind` | `LISTING_PAGE`、`LISTING_LIST_PAGE`、`LISTING_PHOTO`、`FLOOR_PLAN_IMAGE`、`LAYOUT_DIAGRAM`、`SALES_CONTROL_TABLE`、`GOV_DATASET`、`TRANSACTION_RECORD`、`USER_OBSERVATION`、`PRIOR_TRANSCRIPTION` |
-| `assessment.flags` | `REGISTRY_GAP`、`MAPPING_DISPUTE`、`INTERNAL_INCONSISTENCY`、`STALE_EVIDENCE`、`PHOTO_REUSE`、`AREA_BASIS_INFERRED`、`AREA_BASIS_AMBIGUOUS` |
+| `assessment.flags` | `REGISTRY_GAP`、`MAPPING_DISPUTE`、`INTERNAL_INCONSISTENCY`、`STALE_EVIDENCE`、`PHOTO_REUSE`、`AREA_BASIS_INFERRED`、`AREA_BASIS_AMBIGUOUS`、`MAP_ADDRESS_IGNORED`、`MODEL_INFERENCE_USED`（v0.6：決策模型的推論參與了計分） |
 | `fetch_run.run_type` | `BASELINE`、`SCHEDULED`、`MANUAL_TRIGGER`、`MANUAL_IMPORT` |
 | `fetch_run.status` | `QUEUED`、`RUNNING`、`SUCCEEDED`、`PARTIAL`、`FAILED`、`SKIPPED`、`CANCELLED` |
 | `fetch_run.coverage` | `PENDING`、`COMPLETE`、`INCOMPLETE`、`NOT_APPLICABLE` |
@@ -609,6 +614,12 @@ erDiagram
 - `idempotency_record`：`key`、`request_hash`、`response_status`、`response_body`、`created_at`、`expires_at`。
 - `ruleset`：`version`、`params_json`（權重、門檻、容差）、`created_at`。
 - `calibration`：`version`、`dataset_split_id`、`method`、`created_at`（M1 之後才會有）。
+- **v0.6 實作新增**（`jev/db.py`；`meta.schema_version` 目前是 5，啟動時自動備份並補上新增欄位）：
+  - `decision_call`：每次呼叫外部決策模型的紀錄（`purpose`、`provider`、`model`、`endpoint`、`wire_format`、`questions`、`request_hash`、`image_count`、`status`、`http_status`、`error`、`input_tokens`、`cost_usd`、`latency_ms`、`created_at`）。不存請求內容與圖片；`cost_usd` 用於每月預算上限（D-113）。
+  - `lvr_transaction`：官方實價登錄中聯上世界的成交（`serial` 唯一、`season`、`number`、`floor`、`trade_date`、`rooms`、`ping_ex_parking`、`main_ping`、`total_price`、`parking_price`、`source_file`）。
+  - `alert_rule.deleted_at`：刪除規則時保留紀錄（歷史通知仍然指得到規則）。
+  - 模型答案存成 `evidence`（`kind = INFERENCE`、`origin = RULE`、`field` 為 `layout.front_row`、`floor.band`、`membership.text`、`identity.same`）；使用者提供的照片只存雜湊（`field = listing_photo`、`content_hash`）。
+- **尚未實作**（MVP 不需要）：`building`、`registry_coverage`、`run_observation`、`source_document`；`assessment.calibrated_probability` 在 API 一律回傳 null。
 
 ### 5.4 來源相依與獨立性（v0.3，【建議預設】）
 **根來源**（`source_origin`）代表一個原始資訊出處：誰陳述（`asserting_party_type`、`asserting_party_key`）、以什麼形式（`origin_type`）、何時由誰取得。

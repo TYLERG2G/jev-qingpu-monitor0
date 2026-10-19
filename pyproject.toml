@@ -1,0 +1,16 @@
+[project]
+name = "jev"
+version = "0.6.0"
+description = "JEV：聯上世界房源監控、同屋辨識與完整門牌推斷（本機 MVP）"
+requires-python = ">=3.11"
+dependencies = []  # 執行期只用標準函式庫（D-111）
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pyyaml>=6", "jsonschema>=4.20"]  # Anaconda base 已內建；不需要另外安裝
+
+[project.scripts]
+jev = "jev.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

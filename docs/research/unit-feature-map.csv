@@ -1,0 +1,18 @@
+sales_unit,row,kitchen_side,status,source,note
+A1,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排（靠高鐵南路）
+A2,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排
+A3,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排
+A5,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排
+B1,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排；B 棟四向鏡像，需要前後排＋左右兩個特徵
+B2,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排
+B3,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排
+B5,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排
+C1,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排；與 C2 左右鏡像：廚衛方向待從平面圖確認
+C2,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排；與 C1 左右鏡像
+C3,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排；坪型唯一
+C5,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排；坪型唯一（推論）
+D1,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排
+D2,front,unknown,INFERRED,leju-layout-analysis §2.2 §4,上排
+D3,middle,unknown,INFERRED,leju-layout-analysis §2.2 §4,中間；坪型唯一
+D5,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排
+D6,back,unknown,INFERRED,leju-layout-analysis §2.2 §4,下排

@@ -7,7 +7,7 @@
 ## 1. 自動檢查（已執行）
 | # | 檢查項 | 方法 | v0.3 結果 |
 |---|--------|------|-----------|
-| A-01 | `openapi.yaml` 可以解析，版本是 3.1.0 | `yaml.safe_load` | 通過（53 個路徑、60 個操作、151 個 schema） |
+| A-01 | `openapi.yaml` 可以解析，版本是 3.1.0 | `yaml.safe_load` | 通過（53 個路徑、60 個操作、153 個 schema；v0.6 新增 UserEvidenceFields 等） |
 | A-02 | 所有 `$ref` 都能解析 | 逐一走訪 | 通過（471 個） |
 | A-03 | 每個 component schema 都是合法的 JSON Schema 2020-12 | `Draft202012Validator.check_schema` | 通過 |
 | A-04 | discriminator 的 mapping 與 oneOf 一致，每個目標都有對應的 const | 腳本 | 通過 |
@@ -27,6 +27,14 @@
 | A-17 | 「樂屋網」只出現在次要或區分語境 | regex | 通過 |
 | A-18 | 建議預設項目沒有被標成【已確認】 | regex | 通過 |
 | A-19 | Mermaid 基本語法 lint（圖表類型、subgraph/end、括號平衡、未加引號的特殊字元、erDiagram 欄位與關聯、stateDiagram 轉移、sequence 區塊） | 腳本（15 張圖，包括外部改寫的 04 的 4 張） | 通過。v0.3 修正了 lint 本身的誤報：`-- "文字" -->` 是合法語法 |
+
+## 1b. 實作測試（v0.6，已執行）
+| # | 檢查項 | 方法 | 結果 |
+|---|--------|------|------|
+| I-01 | 業務行為測試（10 §3） | `python -m pytest -q` | 109 passed；涵蓋 77/120 個 T-* 案例（17 §5） |
+| I-02 | 已實作的 API 回應符合 OpenAPI | 測試中以 jsonschema 驗證每個回應 | 通過（51 個操作） |
+| I-03 | 執行期沒有網路擷取 | 檢查 `jev/` 的 import | 通過（只有標準函式庫；SMTP 需使用者自行設定） |
+| I-04 | 本機 HTTP 伺服器（UTF-8、錯誤編碼、未實作方法） | 測試啟動 127.0.0.1 伺服器 | 通過 |
 
 ## 2. 人工檢查（已執行）
 | # | 檢查項 | 結果 |

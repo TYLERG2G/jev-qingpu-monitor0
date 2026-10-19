@@ -49,6 +49,95 @@ paths:
               schema: { $ref: '#/components/schemas/Community' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /community/overview:
+    get:
+      operationId: getCommunityOverview
+      tags: [system]
+      summary: 社區總覽（v0.6）：名冊、刊登歸屬、開價行情、官方成交與缺口
+      description: 只讀彙整；數字是規則與資料的整理，不是機率。`gaps` 依「對門牌準確度的幫助」排序，每項附可直接執行的動作。
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommunityOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /decisions/status:
+    get:
+      operationId: getDecisionStatus
+      tags: [decisions]
+      summary: 決策模型設定狀態（D-020；不含金鑰）
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionStatus' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /decisions/calls:
+    get:
+      operationId: listDecisionCalls
+      tags: [decisions]
+      summary: 最近 100 次外部模型呼叫（費用、延遲、錯誤；不含請求內容與圖片）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties: { items: { type: array, items: { $ref: '#/components/schemas/DecisionCall' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /listings/{listing_id}/decisions:
+    parameters: [{ $ref: '#/components/parameters/ListingId' }]
+    get:
+      operationId: getListingDecisions
+      tags: [decisions]
+      summary: 這則刊登建議問哪些題目，以及既有的模型答案（INFERENCE 證據）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions, answers, status]
+                properties:
+                  suggestions: { type: array, items: { type: object, required: [question, why], properties: { question: { type: [string, 'null'] }, why: { type: string } } } }
+                  answers: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+                  status: { $ref: '#/components/schemas/DecisionStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: askListingDecisions
+      tags: [decisions]
+      summary: 對這則刊登提問（照片只在記憶體中處理，只存雜湊）；答案只做軟計分，不能確認門牌或排除候選
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DecisionAskRequest' } } }
+      responses:
+        '201': { description: 已回答並重新評估, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionAskResult' } } } }
+        '402': { description: 本月預算已用完, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 決策模型未啟用或不允許外送, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: 外部模型錯誤, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /identity-matches/{match_id}/decisions:
+    parameters: [{ name: match_id, in: path, required: true, schema: { type: integer } }]
+    post:
+      operationId: askMatchDecision
+      tags: [decisions]
+      summary: 兩則刊登是否同一戶（軟計分 P9m；不會自動合併）
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DecisionAskRequest' } } }
+      responses:
+        '201': { description: 已回答, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionAskResult' } } } }
+        '402': { description: 本月預算已用完, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '409': { description: 決策模型未啟用, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
   /registry/buildings:
     get:
       operationId: listBuildings
@@ -1442,6 +1531,146 @@ components:
       type: string
       enum: [SALES_UNIT_TO_NUMBER, DWELLING_TO_ADDRESS, SALES_UNIT_TO_BUILDING, SALES_UNIT_TO_UNIT_TYPE]
 
+    DecisionStatus:
+      type: object
+      required: [enabled, provider, model, allow_text, allow_images, problems, monthly_budget_usd, month_spend_usd, questions]
+      properties:
+        enabled: { type: boolean }
+        provider: { type: string, enum: [none, openai, openrouter, typesafe] }
+        model: { type: [string, 'null'] }
+        wire_format: { type: [string, 'null'], enum: [systemone, decisions, null] }
+        supports_images: { type: boolean }
+        allow_text: { type: boolean }
+        allow_images: { type: boolean }
+        problems: { type: array, items: { type: string } }
+        monthly_budget_usd: { type: [number, 'null'] }
+        month_spend_usd: { type: number }
+        questions: { type: object, additionalProperties: { type: object } }
+
+    DecisionAskRequest:
+      type: object
+      required: [consent]
+      additionalProperties: false
+      properties:
+        purposes: { type: array, items: { type: string, enum: [candidate_photo, layout_front_row, layout_kitchen_left, floor_band, membership_text] }, description: 刊登題目；同屋題目不需要 }
+        images: { type: array, maxItems: 4, items: { type: string, pattern: '^data:image/' }, description: 刊登照片（base64 data URL；不會被保存） }
+        photo_urls: { type: array, maxItems: 6, items: { type: string, pattern: '^https://img[0-9]*\.591\.com\.tw/' }, description: 使用者在匯入表單勾選的 591 照片網址；伺服器只在記憶體中下載 }
+        consent: { type: boolean, const: true, description: 使用者確認同意把文字／照片送到設定的外部模型 }
+
+    DecisionAskResult:
+      type: object
+      required: [call_ids, answers, evidence_ids]
+      properties:
+        call_ids: { type: array, items: { type: integer } }
+        answers: { type: object, additionalProperties: { type: object } }
+        evidence_ids: { type: array, items: { type: integer } }
+        photo_evidence_ids: { type: array, items: { type: integer } }
+        screened: { type: array, items: { type: object }, description: 每張照片的分類（只用「室內有窗景」的照片判斷窗景與樓層） }
+        photos_used: { type: integer }
+        address_outcome: { type: string }
+        membership_outcome: { type: string }
+        address_assessment_id: { type: integer }
+        match_outcome: { type: [string, 'null'] }
+        match_score: { type: [number, 'null'] }
+
+    DecisionCall:
+      type: object
+      required: [id, purpose, provider, status, created_at]
+      properties:
+        id: { type: integer }
+        purpose: { type: string, enum: [listing, pair, eval, screen] }
+        listing_id: { type: [integer, 'null'] }
+        identity_match_id: { type: [integer, 'null'] }
+        provider: { type: string }
+        model: { type: [string, 'null'] }
+        wire_format: { type: [string, 'null'] }
+        questions: { type: array, items: { type: string } }
+        image_count: { type: integer }
+        status: { type: string, enum: [OK, ERROR] }
+        http_status: { type: [integer, 'null'] }
+        error: { type: [string, 'null'] }
+        input_tokens: { type: [integer, 'null'] }
+        cost_usd: { type: [number, 'null'] }
+        latency_ms: { type: [integer, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    CommunityOverview:
+      type: object
+      required: [summary, units, listings, market, rules, transactions, gaps, tasks]
+      properties:
+        summary:
+          type: object
+          required: [listings, active, member, floor_known, unit_unique, within_two, confirmed, groups, open_tasks, mapping_verified, units, dwellings_estimate]
+          properties:
+            listings: { type: integer }
+            active: { type: integer }
+            member: { type: integer }
+            floor_known: { type: integer }
+            unit_unique: { type: integer, description: 戶別已縮小到唯一的刊登數 }
+            within_two: { type: integer, description: 完整門牌候選 ≤ 2 的刊登數 }
+            confirmed: { type: integer }
+            groups: { type: integer, description: 含 2 則以上刊登的同屋群組數 }
+            open_tasks: { type: integer, description: 待覆核（不含名冊任務） }
+            mapping_verified: { type: integer }
+            units: { type: integer }
+            dwellings_estimate: { type: integer, description: 依非撤回的推導規則推估的住宅數 }
+        units:
+          type: array
+          items:
+            type: object
+            required: [id, code, building, number, mapping_status, area_min, area_max, mirror_pair, floors, listings, active_count]
+            properties:
+              id: { type: integer }
+              code: { type: string }
+              building: { type: [string, 'null'] }
+              block_position: { type: [string, 'null'] }
+              facades: { type: array, items: { type: string } }
+              number: { type: integer }
+              mapping_status: { $ref: '#/components/schemas/RecordStatus' }
+              area_min: { type: [number, 'null'] }
+              area_max: { type: [number, 'null'] }
+              rooms: { type: [integer, 'null'] }
+              area_source: { type: [string, 'null'], enum: [OBSERVED, MIRROR_PAIR, null] }
+              mirror_pair: { type: string }
+              floors: { type: array, items: { type: integer } }
+              listings: { type: array, items: { type: object } }
+              active_count: { type: integer }
+              exclusive_count: { type: integer, description: 只指向這個戶別（不是鏡像二選一）的上架刊登數 }
+              min_price: { type: [integer, 'null'] }
+        listings: { type: array, items: { type: object } }
+        market:
+          type: array
+          items:
+            type: object
+            required: [group, count, min_price, max_price, median_price, median_unit_price_wan, listing_ids]
+            properties:
+              group: { type: string, description: 坪型（含鏡像戶），例如 D2／D5 }
+              count: { type: integer, description: 上架中的同屋群組數（同一戶只算一次最低價） }
+              min_price: { type: integer }
+              max_price: { type: integer }
+              median_price: { type: number }
+              median_unit_price_wan: { type: [number, 'null'], description: 總價（含車位價）÷ 扣除車位坪數，萬元／坪 }
+              listing_ids: { type: array, items: { type: integer } }
+        rules: { type: array, items: { type: object } }
+        transactions:
+          type: object
+          required: [total, by_unit]
+          properties:
+            total: { type: integer, description: 已匯入的官方實價登錄成交筆數 }
+            by_unit: { type: array, items: { type: object } }
+        gaps:
+          type: array
+          items:
+            type: object
+            required: [priority, title, why, action]
+            properties:
+              priority: { type: integer }
+              title: { type: string }
+              why: { type: string }
+              action: { type: string }
+              listing_ids: { type: array, items: { type: integer } }
+        tasks: { type: object, additionalProperties: { type: integer } }
+
     Community:
       type: object
       required: [id, code, name, city, district, area_name, aliases, current_registry_version_id]
@@ -1803,6 +2032,8 @@ components:
         community_text: { type: [string, 'null'] }
         platform_community_ref: { type: [string, 'null'], description: '例如平台社區編號' }
         sales_unit_text: { type: [string, 'null'], examples: [A2] }
+        units_per_floor: { type: [integer, 'null'], description: '刊登揭露的「該層戶數」（Q-029 建議預設：軟計分 S12）' }
+        map_address: { type: [string, 'null'], description: '刊登的地圖定位地址；只是低可信度線索，不觸發 N1（Q-029 建議預設）' }
         title: { type: [string, 'null'] }
         posted_at: { type: [string, 'null'], format: date-time }
 
@@ -2166,13 +2397,18 @@ components:
         affected_assessment_ids: { type: array, items: { type: integer } }
 
     UserEvidenceInput:
+      description: 使用者佐證輸入（嚴格：不接受未列出的欄位）。欄位與條件見 UserEvidenceFields。
+      allOf:
+        - $ref: '#/components/schemas/UserEvidenceFields'
+      unevaluatedProperties: false
+
+    UserEvidenceFields:
       type: object
       description: |
         使用者提供的佐證；系統建立為 HUMAN_ASSERTION（origin = USER_OBSERVATION）。
         ORIGINAL 必須有 capture（會建立新的根來源）；其他衍生方式必須有 derived_from（沿用上游的根來源）。
         LISTING_LINKAGE 必須說明 link_method 與所連結的刊登；INTERIOR_FEATURE_MATCH 至少列出 2 個比對特徵。
       required: [field, value, description, observed_at, evidence_role, derivation_type]
-      additionalProperties: false
       properties:
         field: { type: string }
         value: {}
@@ -2220,8 +2456,10 @@ components:
             properties: { matched_features: { minItems: 2 } }
 
     EvidenceCreate:
+      description: 由 UserEvidenceFields 組合；不能直接 allOf UserEvidenceInput（它不接受額外欄位，listing_id 與 links 會被拒絕）。
+      unevaluatedProperties: false
       allOf:
-        - $ref: '#/components/schemas/UserEvidenceInput'
+        - $ref: '#/components/schemas/UserEvidenceFields'
         - type: object
           required: [listing_id, links]
           properties:
@@ -2292,6 +2530,7 @@ components:
         effect: { type: [number, 'null'], description: '分數增減；決定性或排除規則為 null' }
         decisive: { type: boolean, default: false }
         evidence_ids: { type: array, items: { type: integer } }
+        detail: { type: [string, 'null'], description: '人看得懂的判定說明' }
 
     ScoredCandidate:
       type: object
@@ -2326,7 +2565,7 @@ components:
         calibrated_probability: { type: 'null', description: '未校準前固定為 null；校準後的版本才會放寬' }
         calibration_version: { type: 'null' }
         basis: { type: string, enum: [SYSTEM_RULES, HUMAN_REVIEW] }
-        flags: { type: array, items: { type: string, enum: [REGISTRY_GAP, MAPPING_DISPUTE, INTERNAL_INCONSISTENCY, STALE_EVIDENCE, PHOTO_REUSE, AREA_BASIS_INFERRED, AREA_BASIS_AMBIGUOUS] } }
+        flags: { type: array, items: { type: string, enum: [REGISTRY_GAP, MAPPING_DISPUTE, INTERNAL_INCONSISTENCY, STALE_EVIDENCE, PHOTO_REUSE, AREA_BASIS_INFERRED, AREA_BASIS_AMBIGUOUS, MAP_ADDRESS_IGNORED, MODEL_INFERENCE_USED] } }
         trigger: { type: string, enum: [NEW_SNAPSHOT, EVIDENCE_CHANGED, REGISTRY_UPDATED, REVIEW, REVIEW_RETRACTED, MERGE, SPLIT, REVERT, RULESET_UPDATED, MANUAL] }
         status: { type: string, enum: [CURRENT, SUPERSEDED] }
         superseded_by_id: { type: [integer, 'null'] }

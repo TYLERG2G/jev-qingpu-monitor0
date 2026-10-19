@@ -80,6 +80,14 @@
 | 覆核 | `GET /review-tasks`、`GET /review-tasks/{task_id}`、`POST /review-tasks/{task_id}/decisions`、`POST /reviews/{review_id}:retract` |
 | 事件與通知 | `GET /events`、`GET /alert-rules`、`POST /alert-rules`、`PATCH /alert-rules/{rule_id}`、`DELETE /alert-rules/{rule_id}`、`GET /notifications` |
 | 來源 | `GET /sources`、`PATCH /sources/{source_id}`、`GET /sources/{source_id}/runs`、`POST /sources/{source_id}/runs` |
+| 社區總覽（v0.6） | `GET /community/overview` |
+| 決策模型（v0.6，D-020） | `GET /decisions/status`、`GET /decisions/calls`、`GET /listings/{listing_id}/decisions`、`POST /listings/{listing_id}/decisions`、`POST /identity-matches/{match_id}/decisions` |
+
+**v0.6 實作補充**：
+- 只接受 Host 為 127.0.0.1／localhost 的請求（其他回 403 `FORBIDDEN_HOST`）。沒有設定 `JEV_API_KEY` 時，伺服器第一次啟動會產生隨機金鑰（`data/api_key.txt`），本機網頁自動帶入。
+- 每個寫入請求是一個交易：任何一步失敗都整個還原。非預期錯誤回 500 `INTERNAL_ERROR`，細節只寫在 `data/logs/jev.log`。
+- 決策模型端點：預設 409 `DECISIONS_DISABLED`；請求必須有 `consent: true`（否則 422 `CONSENT_REQUIRED`）；本月預算用完回 402 `BUDGET_EXCEEDED`；外部模型錯誤回 502。照片以 data URL 傳入，只在記憶體中處理，不保存。
+- 實作狀態（哪些端點已實作）見 [17 §3](17-implementation-status.md#3-實作範圍)。
 
 ## 8. 請求與回應範例
 **成功：SET_UNIT**

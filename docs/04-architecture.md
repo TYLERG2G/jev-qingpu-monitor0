@@ -108,7 +108,7 @@ flowchart TB
   subgraph PresentationLayer["1. 表現層與介面"]
     cli_app["CLI Entrypoint<br/>（Python Typer / Click）"]
     api_server["REST API Server<br/>（FastAPI，只綁 127.0.0.1）"]
-    openapi_spec["OpenAPI 3.1 契約<br/>（api/openapi.yaml；v0.3：60 個操作、151 個 schema）"]
+    openapi_spec["OpenAPI 3.1 契約<br/>（api/openapi.yaml；v0.6：60 個操作、153 個 schema）"]
     api_mw["API 中介層<br/>（Idempotency-Key、If-Match、Merge Patch）"]
   end
 

@@ -7,7 +7,17 @@ desktop.ini
 
 # 未來實作時的本機資料與密鑰（docs/09）
 .env
-data/
+.env.*
+!.env.example
+data/*
+!data/seed/
 logs/
 backups/
 __pycache__/
+
+# 執行期資料
+*.db
+*.db-wal
+*.db-shm
+outbox/
+.pytest_cache/
